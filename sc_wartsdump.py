@@ -11,6 +11,8 @@ import sys
 
 address_ref = dict()
 verbose = True
+# Auto-detect if warts file is using deprecated, type=5 addresses
+deprecated_addresses = False
 
 def read_header(f):
   """ read warts object header """
@@ -80,8 +82,13 @@ def read_referenced_address(f):
 
 def read_old_address(f):
   """ Read a warts deprecated (type 5) style referenced address """
-  addr_id = read_uint8_t(f)
+  # deprecated address references start at 1
+  addr_id = len(address_ref) + 1
+  id_mod = read_uint8_t(f)
   typ = read_uint8_t(f)
+  # "reader...can sanity check the ID number it determines by comparing the
+  # lower 8 bits of the computed ID with the ID that is embedded in the record"
+  assert(addr_id % 255 == id_mod)
   if typ == 0x01:
     addr = f.read(4)
     quad = socket.inet_ntop(socket.AF_INET, addr) 
@@ -137,17 +144,23 @@ def read_flags(f, flag_defines):
   return flags
 
 def read_trace(f):
-  #RB: causes problems with deprecated (type 5) referenced addresses
-  #    which are trace-global.  not clearing this only affects the
-  #    amount of intermediate state maintained w/ new style addresses
-  #address_ref.clear()
+  # deprecated (type 5) referenced addresses are trace-global
+  if not deprecated_addresses:
+    address_ref.clear()
   hops = []
   flags = read_flags(f, trace_flags)
+  # be consistent in populating srcaddr/dstaddr even when deprecated addrs used
+  if ('srcipid' in flags) and ('srcaddr' not in flags):
+    flags['srcaddr'] = flags['srcipid']
+  if ('dstipid' in flags) and ('dstaddr' not in flags):
+    flags['dstaddr'] = flags['dstipid']
   if verbose: print "Flags:", flags
   records = read_uint16_t(f)
   if verbose: print "Hops recorded:", records
   for record in range(records):
     hflags = read_flags(f, hop_flags)
+    if ('addrid' in hflags) and ('addr' not in hflags):
+      hflags['addr'] = hflags['addrid']
     hops.append(hflags)
     if verbose: print "\t", hflags
   end = read_uint16_t(f)
@@ -180,6 +193,35 @@ def read_cycle_stop(f):
   if verbose:
     print "WCycleID:", wcycleid, "Stop:", stop
     print "Flags:", flags
+
+def warts_open(infile):
+  fd = None
+  # try reading as a gzip file first
+  try:
+    fd = gzip.open(infile, 'rb')
+    fd.read(1)
+    fd= gzip.open(infile, 'rb')
+  except IOError, e:
+    fd = open(infile, 'rb')
+  return fd
+
+def warts_next(fd):
+  global deprecated_addresses
+  while True:
+    (obj, length) = read_header(fd)
+    if obj == -1: return (False, False)
+    #print "Object: %02x Len: %d" % (obj, length)
+    if obj == 0x01: read_list(fd)
+    elif obj == 0x02: read_cycle(fd)
+    elif obj == 0x03: read_cycle(fd)
+    elif obj == 0x04: read_cycle_stop(fd)
+    elif obj == 0x05: 
+      deprecated_addresses = True
+      read_old_address(fd)
+    elif obj == 0x06: 
+      return read_trace(fd)
+    else: 
+      assert False
 
 # For each object, define a list of optional variables that may be
 # in the record (dependent on flags indicator) and the callback 
@@ -249,22 +291,8 @@ hop_flags = [
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
-  # try reading as a gzip file first
-  try:
-    f = gzip.open(sys.argv[1], 'rb')
-    f.read(1)
-    f = gzip.open(sys.argv[1], 'rb')
-  except IOError, e:
-    f = open(sys.argv[1], 'rb')
+  f = warts_open(sys.argv[1])
   while True:
-    (obj, length) = read_header(f)
-    if obj == -1: break
-    print "Object: %02x Len: %d" % (obj, length)
-    if obj == 0x01: read_list(f)
-    elif obj == 0x02: read_cycle(f)
-    elif obj == 0x03: read_cycle(f)
-    elif obj == 0x04: read_cycle_stop(f)
-    elif obj == 0x05: read_old_address(f)
-    elif obj == 0x06: read_trace(f)
-    else: 
-      assert False
+    (flags, hops) = warts_next(f)
+    if flags == False: break
+

@@ -50,25 +50,10 @@ def trace_to_tod(flags, hops):
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
-  # try reading as a gzip file first
-  try:
-    f = gzip.open(sys.argv[1], 'rb')
-    f.read(1)
-    f = gzip.open(sys.argv[1], 'rb')
-  except IOError, e:
-    f = open(sys.argv[1], 'rb')
+  sc_wartsdump.verbose = False 
+  f = sc_wartsdump.warts_open(sys.argv[1])
+  print f
   while True:
-    (obj, length) = sc_wartsdump.read_header(f)
-    if obj == -1: break
-    sc_wartsdump.verbose = False 
-    #print "Object: %02x Len: %d" % (obj, length)
-    if obj == 0x01: sc_wartsdump.read_list(f)
-    elif obj == 0x02: sc_wartsdump.read_cycle(f)
-    elif obj == 0x03: sc_wartsdump.read_cycle(f)
-    elif obj == 0x04: sc_wartsdump.read_cycle_stop(f)
-    elif obj == 0x05: sc_wartsdump.read_old_address(f)
-    elif obj == 0x06: 
-      (flags, hops) = sc_wartsdump.read_trace(f)
-      trace_to_tod(flags, hops) 
-    else: 
-      assert False
+    (flags, hops) = sc_wartsdump.warts_next(f)
+    if flags == False: break
+    trace_to_tod(flags, hops) 
