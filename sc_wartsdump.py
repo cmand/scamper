@@ -164,6 +164,9 @@ def read_trace(f):
     # IPID flag not set if IPID is zero
     if ('ipid' not in hflags):
       hflags['ipid'] = 0
+    # the quoted TTL is assumed to be 1 unless the q-ttl flag is set
+    if ('qttl' not in hflags):
+      hflags['qttl'] = 1 
     # the 2B icmp field encodes type (1B) and code (1B).  decode.
     if ('icmp' in hflags):
       hflags['icmp-type'] = hflags['icmp'] >> 8
@@ -288,10 +291,10 @@ hop_flags = [
  ('ipid', read_uint16_t),
  ('tos', read_uint8_t),
  ('mtu', read_uint16_t),
- ('quotlen', read_uint16_t),
- ('quotttl', read_uint8_t),
+ ('qlen', read_uint16_t),
+ ('qttl', read_uint8_t),
  ('tcpflags', read_uint8_t),
- ('quottos', read_uint8_t),
+ ('qtos', read_uint8_t),
  ('icmpext', read_icmpext),
  ('addr', read_address),
 ]
