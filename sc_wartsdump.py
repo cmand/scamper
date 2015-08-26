@@ -139,7 +139,7 @@ def read_flags(f, flag_defines):
       if (flags_set[i]):
         read_cb = flag_defines[i][1]
         val = read_cb(f)
-        #print "Flag:", flag_defines[i][0], "val:", val
+        #print "Flag %d: %s %s" % (i+1, flag_defines[i][0], val)
         flags[flag_defines[i][0]] = val
   return flags
 
@@ -161,6 +161,14 @@ def read_trace(f):
     hflags = read_flags(f, hop_flags)
     if ('addrid' in hflags) and ('addr' not in hflags):
       hflags['addr'] = hflags['addrid']
+    # IPID flag not set if IPID is zero
+    if ('ipid' not in hflags):
+      hflags['ipid'] = 0
+    # the 2B icmp field encodes type (1B) and code (1B).  decode.
+    if ('icmp' in hflags):
+      hflags['icmp-type'] = hflags['icmp'] >> 8
+      hflags['icmp-code'] = hflags['icmp'] & 0xFF
+      del hflags['icmp']
     hops.append(hflags)
     if verbose: print "\t", hflags
   end = read_uint16_t(f)
@@ -274,7 +282,7 @@ hop_flags = [
  ('hopflags', read_uint8_t),
  ('probeid', read_uint8_t),
  ('rtt', read_uint32_t),
- ('icmp', read_uint16_t),
+ ('icmp', read_uint16_t),       # type, code
  ('probesize', read_uint16_t),
  ('replysize', read_uint16_t),
  ('ipid', read_uint16_t),
