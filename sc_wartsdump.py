@@ -178,6 +178,16 @@ def read_trace(f):
   assert (end == 0)
   return (flags, hops)
 
+def read_ping(f):
+  if not deprecated_addresses:
+    address_ref.clear()
+  flags = read_flags(f, ping_flags)
+  print "Ping Params:", flags
+  rcount = read_uint16_t(f)
+  for i in range(rcount):
+    flags = read_flags(f, ping_reply_flags)
+    print "Reply %d: %s:" % (i+1, flags)
+
 def read_list(f):
   wlistid = read_uint32_t(f)
   listid = read_uint32_t(f)
@@ -231,8 +241,10 @@ def warts_next(fd):
       read_old_address(fd)
     elif obj == 0x06: 
       return read_trace(fd)
+    elif obj == 0x07: read_ping(fd)
     else: 
-      assert False
+      print "Unsupported object: %02x Len: %d" % (obj, length)
+      sys.exit(-1)
 
 # For each object, define a list of optional variables that may be
 # in the record (dependent on flags indicator) and the callback 
@@ -245,6 +257,57 @@ list_flags = [
 cycle_flags = [
  ('stoptime', read_uint32_t),
  ('hostname', read_string),
+]
+
+ping_flags = [
+ ('listid', read_uint32_t),
+ ('cycleid', read_uint32_t),
+ ('srcipid', read_referenced_address),
+ ('dstipid', read_referenced_address),
+ ('timeval', read_timeval),
+ ('stopreas', read_uint8_t),
+ ('stopdata', read_uint8_t),
+ ('datalen', read_uint16_t),
+ ('data', read_uint8_t),
+ ('pcount', read_uint16_t),
+ ('size', read_uint16_t),
+ ('wait', read_uint8_t),
+ ('ttl', read_uint8_t),
+ ('rcount', read_uint16_t),
+ ('psent', read_uint16_t),
+ ('method', read_uint8_t),
+ ('sport', read_uint16_t),
+ ('dport', read_uint16_t),
+ ('userid', read_uint32_t),
+ ('srcaddr', read_address),
+ ('dstaddr', read_address),
+ ('flags', read_uint8_t),
+ ('tos', read_uint8_t),
+ ('tsps', read_address),
+ ('icmpsum', read_uint16_t),
+ ('pmtu', read_uint16_t),
+ ('timeout', read_uint8_t),
+ ('waitus', read_uint32_t),
+]
+
+ping_reply_flags = [
+ ('dstipid', read_referenced_address),
+ ('flags', read_uint8_t),
+ ('replyttl', read_uint8_t),
+ ('replysize', read_uint16_t),
+ ('icmp', read_uint16_t),
+ ('rtt', read_uint32_t),
+ ('probeid', read_uint16_t),
+ ('replyipid', read_uint16_t),
+ ('probeipid', read_uint16_t),
+ ('replyproto', read_uint8_t),
+ ('tcpflags', read_uint8_t),
+ ('addr', read_address),
+ ('v4rr', read_address),
+ ('v4ts', read_address),
+ ('replyipid32', read_uint32_t),
+ ('tx', read_timeval),
+ ('tsreply', read_uint32_t), # broken; should read 12B
 ]
 
 trace_flags = [
