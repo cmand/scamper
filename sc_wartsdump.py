@@ -6,7 +6,7 @@
 #
 import struct
 import socket
-import gzip
+import gzip, bz2
 import sys
 
 address_ref = dict()
@@ -217,14 +217,23 @@ def read_cycle_stop(f):
 
 def warts_open(infile):
   fd = None
-  # try reading as a gzip file first
+  # try reading as a bz2 file
+  try:
+    fd = bz2.BZ2File(infile, 'rb')
+    fd.read(1)
+    fd = bz2.BZ2File(infile, 'rb')
+    return fd
+  except IOError, e:
+    pass
+  # try reading as a gzip file
   try:
     fd = gzip.open(infile, 'rb')
     fd.read(1)
-    fd= gzip.open(infile, 'rb')
+    fd = gzip.open(infile, 'rb')
+    return fd
   except IOError, e:
-    fd = open(infile, 'rb')
-  return fd
+    pass
+  return open(infile, 'rb')
 
 def warts_next(fd):
   global deprecated_addresses
