@@ -182,11 +182,14 @@ def read_ping(f):
   if not deprecated_addresses:
     address_ref.clear()
   flags = read_flags(f, ping_flags)
-  print "Ping Params:", flags
+  if verbose: print "Ping Params:", flags
   rcount = read_uint16_t(f)
+  pings = []
   for i in range(rcount):
-    flags = read_flags(f, ping_reply_flags)
-    print "Reply %d: %s:" % (i+1, flags)
+    ping = read_flags(f, ping_reply_flags)
+    pings.append(ping)
+    if verbose: print "Reply %d: %s:" % (i+1, ping)
+  return (flags, pings)
 
 def read_list(f):
   wlistid = read_uint32_t(f)
@@ -250,7 +253,8 @@ def warts_next(fd):
       read_old_address(fd)
     elif obj == 0x06: 
       return read_trace(fd)
-    elif obj == 0x07: read_ping(fd)
+    elif obj == 0x07: 
+      return read_ping(fd)
     else: 
       print "Unsupported object: %02x Len: %d" % (obj, length)
       sys.exit(-1)

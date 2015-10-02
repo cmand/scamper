@@ -4,9 +4,6 @@
 # Author:       Robert Beverly <rbeverly@nps.edu>
 # Description:  Parse a binary warts capture according to warts.5
 #
-import struct
-import socket
-import gzip
 import sys
 import sc_wartsdump
 
