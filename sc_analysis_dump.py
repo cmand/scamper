@@ -5,7 +5,7 @@
 # Description:  Parse a binary warts capture according to warts.5
 #
 import sys
-import sc_wartsdump
+from sc_warts import WartsReader
 
 scamper_stop_reasons = ['none', 'completed', 'unreach', 'icmp', 'loop', 'gaplimit', 'error', 'hoplimit', 'gss', 'halted']
 
@@ -47,10 +47,8 @@ def trace_to_tod(flags, hops):
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
-  sc_wartsdump.verbose = False 
-  f = sc_wartsdump.warts_open(sys.argv[1])
-  print f
+  w = WartsReader(sys.argv[1], verbose=False)
   while True:
-    (flags, hops) = sc_wartsdump.warts_next(f)
+    (flags, hops) = w.next()
     if flags == False: break
     trace_to_tod(flags, hops) 
