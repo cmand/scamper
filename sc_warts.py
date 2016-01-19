@@ -15,7 +15,8 @@ class WartsReader:
     self.verbose = verbose
     # Auto-detect if warts file is using deprecated, type=5 addresses
     self.deprecated_addresses = False
-    self.fd = warts_open(wartsfile)
+    self.wartsfile = wartsfile
+    self.fd = warts_open(self.wartsfile)
 
     # For each object, define a list of optional variables that may be
     # in the record (dependent on flags indicator) and the callback 
