@@ -49,13 +49,14 @@ class WartsStats(WartsReader):
     return (flags, ips, rtts, meta)
 
   @staticmethod
-  def addhop(lasthop, hop, interfaces, edges):
+  def addhop(lasthop, hop, interfaces, edges, ignore_anon=True):
     interfaces.add(hop)
     if lasthop:
-      e1 = (lasthop, hop)
-      e2 = (hop, lasthop)
-      if (e1 not in edges) and (e2 not in edges):
-        edges.add(e1)
+      if not (ignore_anon and (hop == '*' or lasthop == '*')):
+        e1 = (lasthop, hop)
+        e2 = (hop, lasthop)
+        if (e1 not in edges) and (e2 not in edges):
+          edges.add(e1)
 
   def stats(self, verbose=False):
     dests = set()  # Destinations / Targets

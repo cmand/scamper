@@ -294,8 +294,11 @@ class WartsReader:
     # a referenced address
     else:
       addr_id = WartsReader.read_uint32_t(fd)
-      assert (addr_id in self.address_ref)
-      addr = self.address_ref[addr_id]
+      try:
+        addr = self.address_ref[addr_id]
+      except:
+        print "Die: couldn't find referenced address %d" % addr_id
+        sys.exit(-1)
     if typ == 0:
       if len(addr) == 4: typ = 1
       if len(addr) == 16: typ = 2
