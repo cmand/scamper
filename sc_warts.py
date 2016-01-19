@@ -226,7 +226,7 @@ class WartsReader:
     lname = self.read_string(self.fd)
     flags = self.read_flags(self.list_flags)
     if self.verbose:
-      print "ListID:", listid, "Name:", lname
+      print "WlistID:", wlistid, "ListID:", listid, "Name:", lname
       print "Flags:", flags
 
   def read_cycle(self):
@@ -253,9 +253,9 @@ class WartsReader:
     if len(buf) != 8:
       return (-1, -1)
     (magic, obj, length) = struct.unpack('!HHI', buf)
-    if (magic != 0x1205):
+    if self.verbose:
       print "Magic: %02X Obj: %02X Len: %02x" % (magic, obj, length)
-      assert False
+    assert(magic == 0x1205)
     return (obj, length)
 
   def read_old_address(self):
