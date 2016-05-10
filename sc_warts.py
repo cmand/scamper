@@ -9,7 +9,7 @@ import socket
 import gzip, bz2
 import sys
 
-class WartsReader:
+class WartsReader(object):
   def __init__(self, wartsfile, verbose=False):
     self.address_ref = dict()
     self.verbose = verbose
@@ -393,7 +393,7 @@ def warts_open(infile):
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
-  f = warts_open(sys.argv[1])
+  w = WartsReader(sys.argv[1], verbose=True)
   while True:
-    (flags, hops) = warts_next(f)
+    (flags, hops) = w.next()
     if flags == False: break

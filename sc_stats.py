@@ -6,15 +6,35 @@
 #               Extends base WartsReader class.
 #
 import sys
+import time
 from sc_warts import WartsReader
 
 class WartsStats(WartsReader):
+  def __init__(self, wartsfile, verbose=False):
+    super(WartsStats, self).__init__(wartsfile, verbose)
+    self.ts_begin = 0
+    self.ts_end = 0
+
   """ Helper function """
   @staticmethod
   def dict_append(d,k,v):
     if (k not in d):
       d[k] = []
     d[k].append(v)
+
+  @staticmethod
+  def epochtostr(epoch):
+    return time.strftime('%Y-%m-%d %H:%M:%S %Z', time.localtime(int(epoch)))
+
+  def tsbegin(self):
+    return self.epochtostr(self.ts_begin)
+
+  def tsend(self):
+    return self.epochtostr(self.ts_end)
+
+  def elapsed(self):
+    return self.ts_end - self.ts_begin
+
 
   """ Takes a list of warts hops from a WartsReader. Returns 
       sequential IP path list, along with a dictionary
@@ -23,6 +43,11 @@ class WartsStats(WartsReader):
     (flags, hops) = self.next()
     if flags == False:
       return (None, None, None, None)
+
+    ts = flags['timeval']
+    if ts > self.ts_end: self.ts_end = ts
+    if not self.ts_begin: self.ts_begin = ts
+    if ts < self.ts_begin: self.ts_begin = ts
 
     i = 0
     ips = []
@@ -58,7 +83,7 @@ class WartsStats(WartsReader):
         if (e1 not in edges) and (e2 not in edges):
           edges.add(e1)
 
-  def stats(self, verbose=False):
+  def stats(self, verbose=False, count=0):
     dests = set()  # Destinations / Targets
     ints = set()   # Interfaces
     edges = set()  # Edges
@@ -75,12 +100,15 @@ class WartsStats(WartsReader):
       if verbose and (cnt % 1000 == 0):
         print >> sys.stderr, ">> %s (traces:%d/dests:%d/ints:%d/edges:%d)" % \
           (self.wartsfile, cnt, len(dests), len(ints), len(edges))
+      if cnt == count: break
     return (dests, ints, edges)
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
   w = WartsStats(sys.argv[1], verbose=False)
-  (dests, ints, edges) = w.stats(verbose=True) 
+  (dests, ints, edges) = w.stats(verbose=True)
   print "Probed targets: %d" % (len(dests))
   print "Interfaces discovered: %d" % (len(ints))
   print "Edges discovered: %d" % (len(edges))
+  print "Trace start: %s end: %s (%2.6f sec)" % \
+    (w.tsbegin(), w.tsend(), w.elapsed())
