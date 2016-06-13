@@ -263,8 +263,8 @@ class WartsReader(object):
     """ Read a warts deprecated (type 5) style referenced address """
     # deprecated address references start at 1
     addr_id = len(self.address_ref) + 1
-    id_mod = read_uint8_t(self.fd)
-    typ = read_uint8_t(self.fd)
+    id_mod = self.read_uint8_t(self.fd)
+    typ = self.read_uint8_t(self.fd)
     # "reader...can sanity check the ID number it determines by comparing the
     # lower 8 bits of the computed ID with the ID that is embedded in the record"
     assert(addr_id % 255 == id_mod)
