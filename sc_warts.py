@@ -168,7 +168,10 @@ class WartsReader(object):
       for i in range(len(flags_set)):
         if (flags_set[i]):
           read_cb = flag_defines[i][1]
-          val = read_cb(self.fd)
+          if read_cb == self.read_referenced_address:
+            val = read_cb()
+          else:
+            val = read_cb(self.fd)
           #print "Flag %d: %s %s" % (i+1, flag_defines[i][0], val)
           flags[flag_defines[i][0]] = val
     return flags
