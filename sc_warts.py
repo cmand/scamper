@@ -315,7 +315,7 @@ class WartsReader(object):
 
   def read_referenced_address(self):
     """ Resolve a warts deprecated (type 5) style referenced address """
-    addr_id = read_uint32_t(self.fd)
+    addr_id = self.read_uint32_t(self.fd)
     assert (addr_id in self.address_ref)
     addr = self.address_ref[addr_id]
     return addr
