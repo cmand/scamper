@@ -168,7 +168,10 @@ class WartsReader(object):
       for i in range(len(flags_set)):
         if (flags_set[i]):
           read_cb = flag_defines[i][1]
-          val = read_cb(self.fd)
+          if read_cb == self.read_referenced_address:
+            val = read_cb()
+          else:
+            val = read_cb(self.fd)
           #print "Flag %d: %s %s" % (i+1, flag_defines[i][0], val)
           flags[flag_defines[i][0]] = val
     return flags
@@ -263,8 +266,8 @@ class WartsReader(object):
     """ Read a warts deprecated (type 5) style referenced address """
     # deprecated address references start at 1
     addr_id = len(self.address_ref) + 1
-    id_mod = read_uint8_t(self.fd)
-    typ = read_uint8_t(self.fd)
+    id_mod = self.read_uint8_t(self.fd)
+    typ = self.read_uint8_t(self.fd)
     # "reader...can sanity check the ID number it determines by comparing the
     # lower 8 bits of the computed ID with the ID that is embedded in the record"
     assert(addr_id % 255 == id_mod)
@@ -312,7 +315,7 @@ class WartsReader(object):
 
   def read_referenced_address(self):
     """ Resolve a warts deprecated (type 5) style referenced address """
-    addr_id = read_uint32_t(self.fd)
+    addr_id = self.read_uint32_t(self.fd)
     assert (addr_id in self.address_ref)
     addr = self.address_ref[addr_id]
     return addr
