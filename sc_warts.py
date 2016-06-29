@@ -214,14 +214,14 @@ class WartsReader(object):
   def read_ping(self):
     if not self.deprecated_addresses:
       self.address_ref.clear()
-    flags = read_flags(ping_flags)
-    if verbose: print "Ping Params:", flags
-    rcount = read_uint16_t(self.fd)
+    flags = self.read_flags(self.ping_flags)
+    if self.verbose: print "Ping Params:", flags
+    rcount = WartsReader.read_uint16_t(self.fd)
     pings = []
     for i in range(rcount):
-      ping = read_flags(ping_reply_flags)
+      ping = self.read_flags(self.ping_reply_flags)
       pings.append(ping)
-      if verbose: print "Reply %d: %s:" % (i+1, ping)
+      if self.verbose: print "Reply %d: %s:" % (i+1, ping)
     return (flags, pings)
 
   def read_list(self):
