@@ -183,8 +183,11 @@ class WartsPing(WartsBaseObject):
     ]
 
   def finalize(self):
-    self.buf += pack_uint16_t(self.reply.count)
-    self.buf += self.reply.buf
+    if self.reply:
+      self.buf += pack_uint16_t(self.reply.count)
+      self.buf += self.reply.buf
+    else:
+      self.buf += pack_uint16_t(0)
     return self.buf
 
 class WartsPingReply(WartsBaseObject):
@@ -247,8 +250,11 @@ class WartsTrace(WartsBaseObject):
     ]
 
   def finalize(self):
-    self.buf += pack_uint16_t(self.reply.count)
-    self.buf += self.reply.buf
+    if self.reply:
+      self.buf += pack_uint16_t(self.reply.count)
+      self.buf += self.reply.buf
+    else:
+      self.buf += pack_uint16_t(0)
     # end of hop records indicated by 0x0000
     self.buf += pack_uint16_t(0)
     return self.buf
