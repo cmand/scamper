@@ -34,6 +34,9 @@ import socket
 from math import ceil
 import sys
 
+obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLE' : 0x03, 
+             'TRACE' : 0x06, 'PING' : 0x07, 'MAGIC' : 0x1205}
+
 def pack_uint32_t(b):
   return (struct.pack('!I', b))
 
@@ -70,44 +73,34 @@ def pack_timestamp(val):
   buf = pack_uint32_t(sec) + pack_uint32_t(usec)
   return buf
 
-class WartsPing(object):
-  def __init__(self):
-    self.typ = 0x07
+class WartsBaseObject(object):
+  def __init__(self, objtype=obj_type['NONE']):
+    self.typ = objtype
     self.buf = ""
     self.setflags = dict()
     self.referenced_addresses = dict()
     self.last_referenced_address_id = -1
     self.reply = None
-    self.flags = [
-     ('listid', pack_uint32_t),
-     ('cycleid', pack_uint32_t),
-     ('srcipid', None),
-     ('dstipid', None),
-     ('timeval', pack_timestamp),
-     ('stopreas', pack_uint8_t),
-     ('stopdata', pack_uint8_t),
-     ('datalen', pack_uint16_t),
-     ('data', pack_uint8_t),
-     ('pcount', pack_uint16_t),
-     ('size', pack_uint16_t),
-     ('wait', pack_uint8_t),
-     ('ttl', pack_uint8_t),
-     ('rcount', pack_uint16_t),
-     ('psent', pack_uint16_t),
-     ('method', pack_uint8_t),
-     ('sport', pack_uint16_t),
-     ('dport', pack_uint16_t),
-     ('userid', pack_uint32_t),
-     ('srcaddr', self.pack_address),
-     ('dstaddr', self.pack_address),
-     ('flags', pack_uint8_t),
-     ('tos', pack_uint8_t),
-     ('tsps', None),
-     ('icmpsum', pack_uint16_t),
-     ('pmtu', pack_uint16_t),
-     ('timeout', pack_uint8_t),
-     ('waitus', pack_uint32_t),
-    ]
+    self.flags = []
+
+  def add(self, flags):
+    for flag in flags:
+      self.setflags[flag] = flags[flag]  
+    self.make_flags()
+
+  def add_reply(self, flags):
+    if not self.reply: 
+      if self.typ == obj_type['TRACE']:
+        self.reply = WartsTraceHop()
+      elif self.typ == obj_type['PING']:
+        self.reply = WartsPingReply()
+    self.reply.update_ref(self.referenced_addresses, self.last_referenced_address_id)
+    self.reply.add(flags)
+    self.reply.count+=1
+
+  def update_ref(self, _referenced_address, _last_referenced_address_id):
+    self.referenced_addresses = _referenced_address
+    self.last_referenced_address_id = _last_referenced_address_id
 
   def reset(self):
     self.buf = ""
@@ -117,27 +110,6 @@ class WartsPing(object):
     if self.reply:
       del self.reply
       self.reply = None
-
-  def finalize(self):
-    self.buf += pack_uint16_t(self.reply.count)
-    self.buf += self.reply.buf
-    return self.buf
-
-  def add_reply(self, flags):
-    if not self.reply: 
-      self.reply = WartsPingReply()
-    self.reply.update_ref(self.referenced_addresses, self.last_referenced_address_id)
-    self.reply.add(flags)
-    self.reply.count+=1
-
-  def update_ref(self, _referenced_address, _last_referenced_address_id):
-    self.referenced_addresses = _referenced_address
-    self.last_referenced_address_id = _last_referenced_address_id
-
-  def add(self, flags):
-    for flag in flags:
-      self.setflags[flag] = flags[flag]  
-    self.make_flags()
 
   def pack_address(self, addr):
     if addr in self.referenced_addresses:
@@ -172,10 +144,52 @@ class WartsPing(object):
     self.buf += pack_uint16_t(len(flag_buffer))
     self.buf += flag_buffer
 
- 
-class WartsPingReply(WartsPing):
+  def finalize(self):
+    pass
+
+
+class WartsPing(WartsBaseObject):
   def __init__(self):
-    super(WartsPingReply, self).__init__()
+    super(WartsPing, self).__init__(obj_type['PING'])
+    self.flags = [
+     ('listid', pack_uint32_t),
+     ('cycleid', pack_uint32_t),
+     ('srcipid', None),
+     ('dstipid', None),
+     ('timeval', pack_timestamp),
+     ('stopreas', pack_uint8_t),
+     ('stopdata', pack_uint8_t),
+     ('datalen', pack_uint16_t),
+     ('data', pack_uint8_t),
+     ('pcount', pack_uint16_t),
+     ('size', pack_uint16_t),
+     ('wait', pack_uint8_t),
+     ('ttl', pack_uint8_t),
+     ('rcount', pack_uint16_t),
+     ('psent', pack_uint16_t),
+     ('method', pack_uint8_t),
+     ('sport', pack_uint16_t),
+     ('dport', pack_uint16_t),
+     ('userid', pack_uint32_t),
+     ('srcaddr', self.pack_address),
+     ('dstaddr', self.pack_address),
+     ('flags', pack_uint8_t),
+     ('tos', pack_uint8_t),
+     ('tsps', None),
+     ('icmpsum', pack_uint16_t),
+     ('pmtu', pack_uint16_t),
+     ('timeout', pack_uint8_t),
+     ('waitus', pack_uint32_t),
+    ]
+
+  def finalize(self):
+    self.buf += pack_uint16_t(self.reply.count)
+    self.buf += self.reply.buf
+    return self.buf
+
+class WartsPingReply(WartsBaseObject):
+  def __init__(self):
+    super(WartsPingReply, self).__init__(obj_type['PING'])
     self.count = 0
     self.flags = [
      ('dstipid', None),
@@ -198,6 +212,73 @@ class WartsPingReply(WartsPing):
     ]
 
 
+class WartsTrace(WartsBaseObject):
+  def __init__(self):
+    super(WartsTrace, self).__init__(obj_type['TRACE'])
+    self.flags = [
+     ('listid', pack_uint32_t),
+     ('cycleid', pack_uint32_t),
+     ('srcipid', None),
+     ('dstipid', None),
+     ('timeval', pack_timestamp),
+     ('stopreas', pack_uint8_t),
+     ('stopdata', pack_uint8_t),
+     ('traceflg', pack_uint8_t),
+     ('attempts', pack_uint8_t),
+     ('hoplimit', pack_uint8_t),
+     ('tracetyp', pack_uint8_t),
+     ('probesiz', pack_uint16_t),
+     ('srcport', pack_uint16_t),
+     ('dstport', pack_uint16_t),
+     ('firsttl', pack_uint8_t),
+     ('iptos', pack_uint8_t),
+     ('timeout', pack_uint8_t),
+     ('loops', pack_uint8_t),
+     ('probehop', pack_uint16_t),
+     ('gaplimit', pack_uint8_t),
+     ('gaprch', pack_uint8_t),
+     ('loopfnd', pack_uint8_t),
+     ('probesent', pack_uint16_t),
+     ('minwait', pack_uint8_t),
+     ('confid', pack_uint8_t),
+     ('srcaddr', self.pack_address),
+     ('dstaddr', self.pack_address),
+     ('usrid', pack_uint32_t),
+    ]
+
+  def finalize(self):
+    self.buf += pack_uint16_t(self.reply.count)
+    self.buf += self.reply.buf
+    # end of hop records indicated by 0x0000
+    self.buf += pack_uint16_t(0)
+    return self.buf
+
+class WartsTraceHop(WartsBaseObject):
+  def __init__(self):
+    super(WartsTraceHop, self).__init__(obj_type['TRACE'])
+    self.count = 0
+    self.flags = [
+     ('addrid', None),
+     ('probettl', pack_uint8_t),
+     ('replyttl', pack_uint8_t),
+     ('hopflags', pack_uint8_t),
+     ('probeid', pack_uint8_t),
+     ('rtt', pack_uint32_t),
+     ('icmp', pack_uint16_t),       # type, code
+     ('probesize', pack_uint16_t),
+     ('replysize', pack_uint16_t),
+     ('ipid', pack_uint16_t),
+     ('tos', pack_uint8_t),
+     ('mtu', pack_uint16_t),
+     ('qlen', pack_uint16_t),
+     ('qttl', pack_uint8_t),
+     ('tcpflags', pack_uint8_t),
+     ('qtos', pack_uint8_t),
+     ('icmpext', None),
+     ('addr', self.pack_address),
+    ]
+
+
 class WartsWriter():
   def __init__(self, wartsfile, append=False, verbose=False):
     if not append:
@@ -210,22 +291,23 @@ class WartsWriter():
     return buf + s + '\0'
  
   def write_header(self, buf, typ):
-    head = struct.pack('!HHI', 0x1205, typ, len(buf))
+    head = struct.pack('!HHI', obj_type['MAGIC'], typ, len(buf))
     self.fd.write(head + buf)
  
   def write_list(self, wlistid, listid, lname):
     content = struct.pack('!II', wlistid, listid)
     content = WartsWriter.append_string(content, lname)
     content += struct.pack('B', 0) # no flags
-    self.write_header(content, 0x01)
+    self.write_header(content, obj_type['LIST'])
 
   def write_cycle(self, wcycle, listid, cycleid, start):
     content = struct.pack('!IIII', wcycle, listid, cycleid, start)
     content += struct.pack('B', 0) # no flags
-    self.write_header(content, 0x03)
+    self.write_header(content, obj_type['CYCLE'])
 
   def write_object(self, obj):
     obj.finalize()
-    head = struct.pack('!HHI', 0x1205, obj.typ, len(obj.buf))
+    head = struct.pack('!HHI', obj_type['MAGIC'], obj.typ, len(obj.buf))
     self.fd.write(head + obj.buf)
     obj.reset()
+

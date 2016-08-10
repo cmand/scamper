@@ -9,10 +9,12 @@ These tools replicate the functionality of scamper's utilities by
 providing native python implementations.  The following files 
 are included:
 
-* sc_warts.py:         warts file processing library
+* sc_warts.py:         warts file reading library
+* sc_warts_writer.py:  warts writing library
 * sc_stats.py:         extends warts class to provide stats
 * sc_warts2text.py:     parse warts file, produce text output
 * sc_wartsdump.py:     parse binary warts files
 * sc_analysis_dump.py: covert scamper traces to easily parsed text
+* sc_wartsgrep.py:     create warts file containing only records of specified target
 * sc_sample.py:        sample python using warts class (for developers)
 * sc_attach.py:        interact with scamper over control socket
