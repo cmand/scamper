@@ -25,14 +25,15 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
-# Program:      $Id: sc_warts.py 1551 2015-02-11 14:14:09Z rbeverly $
-# Author:       Robert Beverly <rbeverly@nps.edu>
-# Description:  Parse a binary warts capture according to warts.5
+# Program:      $Id: sc_warts_writer.py $
+# Author:       Robert Beverly <rbeverly@cmand.org>
+# Description:  Write binary warts capture files per warts.5
 #
 import struct
 import socket
 from math import ceil
 import sys
+from os.path import isfile
 
 obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLE' : 0x03, 
              'TRACE' : 0x06, 'PING' : 0x07, 'MAGIC' : 0x1205}
@@ -286,11 +287,18 @@ class WartsTraceHop(WartsBaseObject):
 
 
 class WartsWriter():
-  def __init__(self, wartsfile, append=False, verbose=False):
-    if not append:
+  def __init__(self, wartsfile, append=False, overwrite=True):
+    self.append = append
+    # ensure we don't clobber existing files, if overwrite=False
+    if (not overwrite) and (isfile(wartsfile)):
+      self.append = True
+    if not self.append:
       self.fd = open(wartsfile, 'wb')
     else:
       self.fd = open(wartsfile, 'ab')
+
+  def __del__(self):
+    if self.fd: self.fd.close()
 
   @staticmethod 
   def append_string(buf, s):
@@ -301,15 +309,19 @@ class WartsWriter():
     self.fd.write(head + buf)
  
   def write_list(self, wlistid, listid, lname):
-    content = struct.pack('!II', wlistid, listid)
-    content = WartsWriter.append_string(content, lname)
-    content += struct.pack('B', 0) # no flags
-    self.write_header(content, obj_type['LIST'])
+    # don't overwrite list header, if appending
+    if not self.append:
+      content = struct.pack('!II', wlistid, listid)
+      content = WartsWriter.append_string(content, lname)
+      content += struct.pack('B', 0) # no flags
+      self.write_header(content, obj_type['LIST'])
 
   def write_cycle(self, wcycle, listid, cycleid, start):
-    content = struct.pack('!IIII', wcycle, listid, cycleid, start)
-    content += struct.pack('B', 0) # no flags
-    self.write_header(content, obj_type['CYCLE'])
+    # don't overwrite cycle header, if appending
+    if not self.append:
+      content = struct.pack('!IIII', wcycle, listid, cycleid, start)
+      content += struct.pack('B', 0) # no flags
+      self.write_header(content, obj_type['CYCLE'])
 
   def write_object(self, obj):
     obj.finalize()
@@ -317,3 +329,12 @@ class WartsWriter():
     self.fd.write(head + obj.buf)
     obj.reset()
 
+  def write_blob(self, blob): 
+    self.fd.write(blob)
+
+  def finalize_object(self, obj):
+    obj.finalize()
+    head = struct.pack('!HHI', obj_type['MAGIC'], obj.typ, len(obj.buf))
+    buf = head + obj.buf
+    obj.reset()
+    return buf

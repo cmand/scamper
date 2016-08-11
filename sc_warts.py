@@ -26,7 +26,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 # Program:      $Id: sc_warts.py 1551 2015-02-11 14:14:09Z rbeverly $
-# Author:       Robert Beverly <rbeverly@nps.edu>
+# Author:       Robert Beverly <rbeverly@cmand.org>
 # Description:  Parse a binary warts capture according to warts.5
 #
 import struct
