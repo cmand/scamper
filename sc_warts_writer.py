@@ -34,6 +34,7 @@ import socket
 from math import ceil
 import sys
 from os.path import isfile
+from bz2 import BZ2File
 
 obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLE' : 0x03, 
              'TRACE' : 0x06, 'PING' : 0x07, 'MAGIC' : 0x1205}
@@ -287,15 +288,19 @@ class WartsTraceHop(WartsBaseObject):
 
 
 class WartsWriter():
-  def __init__(self, wartsfile, append=False, overwrite=True):
+  def __init__(self, wartsfile, append=False, overwrite=True, compress=False):
     self.append = append
+    self.fd = None
     # ensure we don't clobber existing files, if overwrite=False
     if (not overwrite) and (isfile(wartsfile)):
       self.append = True
-    if not self.append:
-      self.fd = open(wartsfile, 'wb')
+    flags = 'wb'
+    if self.append: flags = 'ab'
+    if wartsfile.find('.bz2') != -1: compress=True
+    if compress:
+      self.fd = BZ2File(wartsfile, flags)
     else:
-      self.fd = open(wartsfile, 'ab')
+      self.fd = open(wartsfile, flags)
 
   def __del__(self):
     if self.fd: self.fd.close()
