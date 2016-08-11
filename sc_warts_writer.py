@@ -304,6 +304,11 @@ class WartsWriter():
   def append_string(buf, s):
     return buf + s + '\0'
  
+  @staticmethod 
+  def make_header(obj):
+    head = struct.pack('!HHI', obj_type['MAGIC'], obj.typ, len(obj.buf))
+    return head
+
   def write_header(self, buf, typ):
     head = struct.pack('!HHI', obj_type['MAGIC'], typ, len(buf))
     self.fd.write(head + buf)
@@ -331,10 +336,3 @@ class WartsWriter():
 
   def write_blob(self, blob): 
     self.fd.write(blob)
-
-  def finalize_object(self, obj):
-    obj.finalize()
-    head = struct.pack('!HHI', obj_type['MAGIC'], obj.typ, len(obj.buf))
-    buf = head + obj.buf
-    obj.reset()
-    return buf
