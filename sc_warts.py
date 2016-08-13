@@ -42,6 +42,10 @@ class WartsReader(object):
     self.deprecated_addresses = False
     self.wartsfile = wartsfile
     self.fd = warts_open(self.wartsfile)
+    self.record_len = 0
+    self.state = {'wlistid' : 0, 'listid' : 0, 
+                  'wcycleid' : 0, 'cycleid' : 0, 
+                  'name' : "", 'start' : 0}
 
     # For each object, define a list of optional variables that may be
     # in the record (dependent on flags indicator) and the callback 
@@ -161,7 +165,7 @@ class WartsReader(object):
 
   def next(self):
     while True:
-      (obj, length) = self.read_header()
+      (obj, self.record_len) = self.read_header()
       if obj == -1: return (False, False)
       #print "Object: %02x Len: %d" % (obj, length)
       if obj == 0x01: self.read_list()
@@ -176,7 +180,7 @@ class WartsReader(object):
       elif obj == 0x07: 
         return self.read_ping()
       else: 
-        print "Unsupported object: %02x Len: %d" % (obj, length)
+        print "Unsupported object: %02x Len: %d" % (obj, self.record_len)
 
   def read_flags(self, flag_defines):
     """ Warts flag magic. """
@@ -250,22 +254,25 @@ class WartsReader(object):
     return (flags, pings)
 
   def read_list(self):
-    wlistid = self.read_uint32_t(self.fd)
-    listid = self.read_uint32_t(self.fd)
-    lname = self.read_string(self.fd)
+    self.state['wlistid'] = self.read_uint32_t(self.fd)
+    self.state['listid'] = self.read_uint32_t(self.fd)
+    self.state['name'] = self.read_string(self.fd)
     flags = self.read_flags(self.list_flags)
     if self.verbose:
-      print "WlistID:", wlistid, "ListID:", listid, "Name:", lname
+      print "WlistID:", self.state['wlistid'], "ListID:", \
+            self.state['listid'], "Name:", self.state['name']
       print "Flags:", flags
 
   def read_cycle(self):
-    wcycleid = self.read_uint32_t(self.fd)
-    listid = self.read_uint32_t(self.fd)
-    cycleid = self.read_uint32_t(self.fd)
-    start = self.read_uint32_t(self.fd)
+    self.state['wcycleid'] = self.read_uint32_t(self.fd)
+    self.state['listid'] = self.read_uint32_t(self.fd)
+    self.state['cycleid'] = self.read_uint32_t(self.fd)
+    self.state['start'] = self.read_uint32_t(self.fd)
     flags = self.read_flags(self.cycle_flags)
     if self.verbose:
-      print "ListID:", listid, "CycleID:", cycleid, "Start:", start
+      print "WcycleID:", self.state['wcycleid'], "ListID:", \
+            self.state['listid'], "CycleID:", self.state['cycleid'], \
+            "Start:", self.state['start']
       print "Flags:", flags
 
   def read_cycle_stop(self):
