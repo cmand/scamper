@@ -136,7 +136,11 @@ class WartsBaseObject(object):
       if flag_name in self.setflags:
         block = num / 7
         flags[block] += 2**(num % 7) 
-        b = flag_method(self.setflags[flag_name])
+        try:
+          b = flag_method(self.setflags[flag_name])
+        except Exception, e:
+          print "threw:", e, "on:", flag_name, "using:", flag_method
+          exit(-1)
         hb = [hex(ord(z)) for z in b]
         #print "Writing Flag:", num, "name:", flag_name, "value:", self.setflags[flag_name], "bytes:", hb
         flag_buffer += b
