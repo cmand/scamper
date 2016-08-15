@@ -96,7 +96,7 @@ class WartsBaseObject(object):
         self.reply = WartsTraceHop()
       elif self.typ == obj_type['PING']:
         self.reply = WartsPingReply()
-    self.reply.update_ref(self.referenced_addresses, self.last_referenced_address_id)
+      self.reply.update_ref(self.referenced_addresses, self.last_referenced_address_id)
     self.reply.add(flags)
     self.reply.count+=1
 

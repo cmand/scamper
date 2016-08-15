@@ -67,10 +67,11 @@ class WartsStats(WartsReader):
       else:
         ips.append(addr)
         rtts[i] = rtt
-      if hop['icmp-type'] == 3 and hop['icmp-code'] == 1:
-        self.dict_append(meta, i, "!H")
-      if hop['icmp-type'] == 3 and hop['icmp-code'] == 0:
-        self.dict_append(meta, i, "!N")
+      if 'icmp-type' in hop:
+        if hop['icmp-type'] == 3 and hop['icmp-code'] == 1:
+          self.dict_append(meta, i, "!H")
+        if hop['icmp-type'] == 3 and hop['icmp-code'] == 0:
+          self.dict_append(meta, i, "!N")
     return (flags, ips, rtts, meta)
 
   @staticmethod
