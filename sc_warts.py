@@ -161,6 +161,7 @@ class WartsReader(object):
      ('qtos', self.read_uint8_t),
      ('icmpext', self.read_icmpext),
      ('addr', self.read_address),
+     ('tx', self.read_timeval),
     ]
 
   def next(self):
@@ -196,6 +197,9 @@ class WartsReader(object):
       #print "PARAMLEN:", paramlen
       for i in range(len(flags_set)):
         if (flags_set[i]):
+          if (i >= len(flag_defines)):
+            print "** UNKNOWN FLAG: %d" % (i+1)
+            sys.exit(-1)
           read_cb = flag_defines[i][1]
           if read_cb == self.read_referenced_address:
             val = read_cb()
