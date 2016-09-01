@@ -78,6 +78,10 @@ class WartsStats(WartsReader):
   def addhop(lasthop, hop, interfaces, edges, ignore_anon=True):
     interfaces.add(hop)
     if lasthop:
+      # don't add edges to ourselves
+      if lasthop == hop:
+        return
+      # don't add edges between anonymous hops
       if not (ignore_anon and (hop == '*' or lasthop == '*')):
         e1 = (lasthop, hop)
         e2 = (hop, lasthop)
