@@ -389,13 +389,45 @@ class WartsReader(object):
     return (sec + usec/1000000.0)
 
   @staticmethod
+  # copied blindly/stupidly from scamper/scamper_icmpext.h
+  def parse_mpls_icmpext(ie):
+    u32 = struct.unpack('I', ie)[0]
+    b0 = (u32 >> 0) & 0xFF
+    b1 = (u32 >> 8) & 0xFF
+    b2 = (u32 >> 16) & 0xFF
+    b3 = (u32 >> 24) & 0xFF
+    mpls_s = b2 & 0x01
+    #print "MPLS_S:", mpls_s
+    mpls_ttl = b3
+    #print "MPLS_TTL:", mpls_ttl
+    mpls_exp = (b2 >> 1) & 0x07
+    #print "MPLS_EXP:", mpls_exp
+    mpls_label = (b0 << 12) + (b1 << 4) + ((b2 >> 4) & 0xFF)
+    #print "MPLS_Label:", mpls_label
+    extension = "mpls ext ttl: %d, s: %d, exp: %d, label: %d" %  (mpls_ttl, mpls_s, mpls_exp, mpls_label)
+    return extension
+
+  @staticmethod
   def read_icmpext(f):
     """ read ICMP extension header """
-    l = WartsReader.read_uint16_t(f)
-    ic = WartsReader.read_uint8_t(f)
-    it = WartsReader.read_uint8_t(f)
-    buf = f.read(l-2)
-    return "class: " + str(ic) + " type: " + str(it) + " buf: " + WartsReader.hexdump(buf)
+    tot_len = WartsReader.read_uint16_t(f)
+    ret_string = ""
+    #print "TOTAL LEN:", tot_len
+    while tot_len > 0:
+      ie_dl = WartsReader.read_uint16_t(f)  # data length
+      #print "data len:", ie_dl
+      ie_cn = WartsReader.read_uint8_t(f)   # class number
+      #print "class num:", ie_cn
+      ie_ct = WartsReader.read_uint8_t(f)   # class type
+      #print "class type:", ie_ct
+      if ie_cn == 1 and ie_ct == 1:
+        ie_dl_read = ie_dl
+        while ie_dl_read >= 4:
+          buf = f.read(4)
+          ie_dl_read-=4
+          ret_string += WartsReader.parse_mpls_icmpext(buf) + "\n"
+      tot_len = tot_len - 4 - ie_dl
+    return ret_string
 
   @staticmethod
   def read_string(f):
