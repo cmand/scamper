@@ -183,18 +183,18 @@ class WartsReader(object):
       else: 
         print "Unsupported object: %02x Len: %d" % (obj, self.record_len)
 
-  def read_flags(self, flag_defines):
+  def read_flags(self, flag_defines, debug=False):
     """ Warts flag magic. """
     flags_set = []
     while True:
       flag = self.read_uint8_t(self.fd)
-      #print "FLAG: %02X" % flag
+      if debug: print "FLAG: %02X" % flag
       flags_set += [self.bit_set(flag, i) for i in range(1,8)]
       if not self.more_flags(flag): break
     flags = dict()
     if flag > 0 or len(flags_set) > 8:
       paramlen = self.read_uint16_t(self.fd)
-      #print "PARAMLEN:", paramlen
+      if debug: print "PARAMLEN:", paramlen
       for i in range(len(flags_set)):
         if (flags_set[i]):
           if (i >= len(flag_defines)):
@@ -205,7 +205,7 @@ class WartsReader(object):
             val = read_cb()
           else:
             val = read_cb(self.fd)
-          #print "Flag %d: %s %s" % (i+1, flag_defines[i][0], val)
+          if debug: print "Flag %d: %s %s" % (i+1, flag_defines[i][0], val)
           flags[flag_defines[i][0]] = val
     return flags
 
@@ -314,7 +314,7 @@ class WartsReader(object):
       addr = self.fd.read(16)
       quad = socket.inet_ntop(socket.AF_INET6, addr) 
     else:
-      print "Addr type:", typ, "not implemented"
+      print >> sys.stderr, "Addr type:", typ, "not implemented:", self.wartsfile
       assert False
     self.address_ref[addr_id] = quad
     #print "Address ID:", addr_id, "->", quad
@@ -346,7 +346,8 @@ class WartsReader(object):
     elif typ == 2:
       return socket.inet_ntop(socket.AF_INET6, addr)
     else:
-      print "Addr type:", typ, "not implemented"
+      print >> sys.stderr, "Addr type:", typ, "not implemented:", self.wartsfile
+      print >> sys.stderr, "Length:", length, "Len addr:", len(addr)
       assert False
 
   def read_referenced_address(self):
@@ -412,7 +413,7 @@ class WartsReader(object):
     """ read ICMP extension header """
     tot_len = WartsReader.read_uint16_t(f)
     ret_string = ""
-    #print "TOTAL LEN:", tot_len
+    #print "ICMP Extension Total Len:", tot_len
     while tot_len > 0:
       ie_dl = WartsReader.read_uint16_t(f)  # data length
       #print "data len:", ie_dl
@@ -420,12 +421,17 @@ class WartsReader(object):
       #print "class num:", ie_cn
       ie_ct = WartsReader.read_uint8_t(f)   # class type
       #print "class type:", ie_ct
+      # is MPLS?
       if ie_cn == 1 and ie_ct == 1:
         ie_dl_read = ie_dl
         while ie_dl_read >= 4:
           buf = f.read(4)
           ie_dl_read-=4
           ret_string += WartsReader.parse_mpls_icmpext(buf) + "\n"
+      else:
+        buf = f.read(ie_dl)
+        ret_string += "buf: " + WartsReader.hexdump(buf)
+        sys.exit(-1)
       tot_len = tot_len - 4 - ie_dl
     return ret_string
 
