@@ -106,13 +106,14 @@ class WartsStats(WartsReader):
         print >> sys.stderr, ">> %s (traces:%d/dests:%d/ints:%d/edges:%d)" % \
           (self.wartsfile, cnt, len(dests), len(ints), len(edges))
       if cnt == count: break
-    return (dests, ints, edges)
+    return (dests, ints, edges, cnt)
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
   w = WartsStats(sys.argv[1], verbose=False)
-  (dests, ints, edges) = w.stats(verbose=True)
-  print "Probed targets: %d" % (len(dests))
+  (dests, ints, edges, cnt) = w.stats(verbose=True)
+  print "Probes: %d" % cnt
+  print "Unique targets: %d" % (len(dests))
   print "Interfaces discovered: %d" % (len(ints))
   print "Edges discovered: %d" % (len(edges))
   print "Trace start: %s end: %s (%2.6f sec)" % \
