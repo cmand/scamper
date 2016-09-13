@@ -8,13 +8,16 @@ import sys
 from sc_stats import WartsStats
 
 if __name__ == "__main__":
-  assert len(sys.argv) == 2
+  assert len(sys.argv) >= 2
+  target = None
+  if len(sys.argv) == 3: target = sys.argv[2]
 
   w = WartsStats(sys.argv[1], verbose=False)
   while True:
     try:
       (flags, ips, rtts, meta) = w.next_trace()
       if flags == None: break
+      if target and target != flags['dstaddr']: continue
       print "traceroute from %s to %s" % (flags['srcaddr'], flags['dstaddr'])
       for i, ip in enumerate(ips):
         ttl = i+1
