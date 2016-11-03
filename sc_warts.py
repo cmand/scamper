@@ -34,328 +34,41 @@ import socket
 import gzip, bz2
 import sys
 
-class WartsReader(object):
-  def __init__(self, wartsfile, verbose=False):
-    self.address_ref = dict()
-    self.verbose = verbose
-    # Auto-detect if warts file is using deprecated, type=5 addresses
-    self.deprecated_addresses = False
-    self.wartsfile = wartsfile
-    self.fd = warts_open(self.wartsfile)
-    self.record_len = 0
-    self.state = {'wlistid' : 0, 'listid' : 0, 
-                  'wcycleid' : 0, 'cycleid' : 0, 
-                  'name' : "", 'start' : 0}
+obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLE' : 0x03,
+            'TRACE' : 0x06, 'PING' : 0x07, 'MAGIC' : 0x1205}
 
+def unpack_uint8_t(b):
+  return (struct.unpack('B', b[0])[0], 1)
+
+def unpack_uint16_t(b):
+  return (struct.unpack('!H', b[0:2])[0], 2)
+
+def unpack_uint32_t(b):
+  return (struct.unpack('!I', b[0:4])[0], 4)
+
+def read_string(b):
+  (string, remainder) = b.split('\x00', 1)
+  return (string, len(string)+1)
+
+def read_timeval(b):
+  (sec, usec) = struct.unpack('!II', b[0:8])
+  return (sec + usec/1000000.0, 8)
+
+def hexdump(buf):
+  return ''.join('{:02x}'.format(ord(x)) for x in buf)
+
+
+class WartsBaseObject(object):
+  def __init__(self, objtype=obj_type['NONE'], verbose=False):
+    self.typ = objtype
     # For each object, define a list of optional variables that may be
-    # in the record (dependent on flags indicator) and the callback 
+    # in the record (dependent on flags indicator) and the callback
     # to read the variable
-    self.list_flags = [
-     ('description', self.read_string),
-     ('monitor', self.read_string),
-    ]
-
-    self.cycle_flags = [
-     ('stoptime', self.read_uint32_t),
-     ('hostname', self.read_string),
-    ]
-
-    self.ping_flags = [
-     ('listid', self.read_uint32_t),
-     ('cycleid', self.read_uint32_t),
-     ('srcipid', self.read_referenced_address),
-     ('dstipid', self.read_referenced_address),
-     ('timeval', self.read_timeval),
-     ('stopreas', self.read_uint8_t),
-     ('stopdata', self.read_uint8_t),
-     ('datalen', self.read_uint16_t),
-     ('data', self.read_uint8_t),
-     ('pcount', self.read_uint16_t),
-     ('size', self.read_uint16_t),
-     ('wait', self.read_uint8_t),
-     ('ttl', self.read_uint8_t),
-     ('rcount', self.read_uint16_t),
-     ('psent', self.read_uint16_t),
-     ('method', self.read_uint8_t),
-     ('sport', self.read_uint16_t),
-     ('dport', self.read_uint16_t),
-     ('userid', self.read_uint32_t),
-     ('srcaddr', self.read_address),
-     ('dstaddr', self.read_address),
-     ('flags', self.read_uint8_t),
-     ('tos', self.read_uint8_t),
-     ('tsps', self.read_address),
-     ('icmpsum', self.read_uint16_t),
-     ('pmtu', self.read_uint16_t),
-     ('timeout', self.read_uint8_t),
-     ('waitus', self.read_uint32_t),
-    ]
-
-    self.ping_reply_flags = [
-     ('dstipid', self.read_referenced_address),
-     ('flags', self.read_uint8_t),
-     ('replyttl', self.read_uint8_t),
-     ('replysize', self.read_uint16_t),
-     ('icmp', self.read_uint16_t),
-     ('rtt', self.read_uint32_t),
-     ('probeid', self.read_uint16_t),
-     ('replyipid', self.read_uint16_t),
-     ('probeipid', self.read_uint16_t),
-     ('replyproto', self.read_uint8_t),
-     ('tcpflags', self.read_uint8_t),
-     ('addr', self.read_address),
-     ('v4rr', self.read_address),
-     ('v4ts', self.read_address),
-     ('replyipid32', self.read_uint32_t),
-     ('tx', self.read_timeval),
-     ('tsreply', self.read_uint32_t), # broken; should read 12B
-    ]
-
-    self.trace_flags = [
-     ('listid', self.read_uint32_t),
-     ('cycleid', self.read_uint32_t),
-     ('srcipid', self.read_referenced_address),
-     ('dstipid', self.read_referenced_address),
-     ('timeval', self.read_timeval),
-     ('stopreas', self.read_uint8_t),
-     ('stopdata', self.read_uint8_t),
-     ('traceflg', self.read_uint8_t),
-     ('attempts', self.read_uint8_t),
-     ('hoplimit', self.read_uint8_t),
-     ('tracetyp', self.read_uint8_t),
-     ('probesiz', self.read_uint16_t),
-     ('srcport', self.read_uint16_t),
-     ('dstport', self.read_uint16_t),
-     ('firsttl', self.read_uint8_t),
-     ('iptos', self.read_uint8_t),
-     ('timeout', self.read_uint8_t),
-     ('loops', self.read_uint8_t),
-     ('probehop', self.read_uint16_t),
-     ('gaplimit', self.read_uint8_t),
-     ('gaprch', self.read_uint8_t),
-     ('loopfnd', self.read_uint8_t),
-     ('probesent', self.read_uint16_t),
-     ('minwait', self.read_uint8_t),
-     ('confid', self.read_uint8_t),
-     ('srcaddr', self.read_address),
-     ('dstaddr', self.read_address),
-     ('usrid', self.read_uint32_t),
-    ]
-
-    self.hop_flags = [
-     ('addrid', self.read_referenced_address),
-     ('probettl', self.read_uint8_t),
-     ('replyttl', self.read_uint8_t),
-     ('hopflags', self.read_uint8_t),
-     ('probeid', self.read_uint8_t),
-     ('rtt', self.read_uint32_t),
-     ('icmp', self.read_uint16_t),       # type, code
-     ('probesize', self.read_uint16_t),
-     ('replysize', self.read_uint16_t),
-     ('ipid', self.read_uint16_t),
-     ('tos', self.read_uint8_t),
-     ('mtu', self.read_uint16_t),
-     ('qlen', self.read_uint16_t),
-     ('qttl', self.read_uint8_t),
-     ('tcpflags', self.read_uint8_t),
-     ('qtos', self.read_uint8_t),
-     ('icmpext', self.read_icmpext),
-     ('addr', self.read_address),
-     ('tx', self.read_timeval),
-    ]
-
-  def next(self):
-    while True:
-      (obj, self.record_len) = self.read_header()
-      if obj == -1: return (False, False)
-      #print "Object: %02x Len: %d" % (obj, self.record_len)
-      if obj == 0x01: self.read_list()
-      elif obj == 0x02: self.read_cycle()
-      elif obj == 0x03: self.read_cycle()
-      elif obj == 0x04: self.read_cycle_stop()
-      elif obj == 0x05: 
-        self.deprecated_addresses = True
-        self.read_old_address()
-      elif obj == 0x06: 
-        return self.read_trace()
-      elif obj == 0x07: 
-        return self.read_ping()
-      else: 
-        print "Unsupported object: %02x Len: %d" % (obj, self.record_len)
-
-  def read_flags(self, flag_defines, debug=False):
-    """ Warts flag magic. """
-    flags_set = []
-    while True:
-      flag = self.read_uint8_t(self.fd)
-      if debug: print "FLAG: %02X" % flag
-      flags_set += [self.bit_set(flag, i) for i in range(1,8)]
-      if not self.more_flags(flag): break
-    flags = dict()
-    if flag > 0 or len(flags_set) > 8:
-      paramlen = self.read_uint16_t(self.fd)
-      if debug: print "PARAMLEN:", paramlen
-      for i in range(len(flags_set)):
-        if (flags_set[i]):
-          if (i >= len(flag_defines)):
-            print "** UNKNOWN FLAG: %d" % (i+1)
-            sys.exit(-1)
-          read_cb = flag_defines[i][1]
-          if read_cb == self.read_referenced_address:
-            val = read_cb()
-          else:
-            val = read_cb(self.fd)
-          if debug: print "Flag %d: %s %s" % (i+1, flag_defines[i][0], val)
-          flags[flag_defines[i][0]] = val
-    return flags
-
-  def read_trace(self):
-    # deprecated (type 5) referenced addresses are trace-global
-    if not self.deprecated_addresses:
-      self.address_ref.clear()
-    hops = []
-    flags = self.read_flags(self.trace_flags)
-    # be consistent in populating srcaddr/dstaddr even when deprecated addrs used
-    if ('srcipid' in flags) and ('srcaddr' not in flags):
-      flags['srcaddr'] = flags['srcipid']
-    if ('dstipid' in flags) and ('dstaddr' not in flags):
-      flags['dstaddr'] = flags['dstipid']
-    if self.verbose: print "Flags:", flags
-    records = self.read_uint16_t(self.fd)
-    if self.verbose: print "Hops recorded:", records
-    for record in range(records):
-      hflags = self.read_flags(self.hop_flags)
-      if ('addrid' in hflags) and ('addr' not in hflags):
-        hflags['addr'] = hflags['addrid']
-      # IPID flag not set if IPID is zero
-      if ('ipid' not in hflags):
-        hflags['ipid'] = 0
-      # the quoted TTL is assumed to be 1 unless the q-ttl flag is set
-      if ('qttl' not in hflags):
-        hflags['qttl'] = 1 
-      # the 2B icmp field encodes type (1B) and code (1B).  decode.
-      if ('icmp' in hflags):
-        hflags['icmp-type'] = hflags['icmp'] >> 8
-        hflags['icmp-code'] = hflags['icmp'] & 0xFF
-        del hflags['icmp']
-      hops.append(hflags)
-      if self.verbose: print "\t", hflags
-    end = WartsReader.read_uint16_t(self.fd)
-    assert (end == 0)
-    return (flags, hops)
-
-  def read_ping(self):
-    if not self.deprecated_addresses:
-      self.address_ref.clear()
-    flags = self.read_flags(self.ping_flags)
-    if self.verbose: print "Ping Params:", flags
-    rcount = WartsReader.read_uint16_t(self.fd)
-    pings = []
-    for i in range(rcount):
-      ping = self.read_flags(self.ping_reply_flags)
-      pings.append(ping)
-      if self.verbose: print "Reply %d: %s:" % (i+1, ping)
-    return (flags, pings)
-
-  def read_list(self):
-    self.state['wlistid'] = self.read_uint32_t(self.fd)
-    self.state['listid'] = self.read_uint32_t(self.fd)
-    self.state['name'] = self.read_string(self.fd)
-    flags = self.read_flags(self.list_flags)
-    if self.verbose:
-      print "WlistID:", self.state['wlistid'], "ListID:", \
-            self.state['listid'], "Name:", self.state['name']
-      print "Flags:", flags
-
-  def read_cycle(self):
-    self.state['wcycleid'] = self.read_uint32_t(self.fd)
-    self.state['listid'] = self.read_uint32_t(self.fd)
-    self.state['cycleid'] = self.read_uint32_t(self.fd)
-    self.state['start'] = self.read_uint32_t(self.fd)
-    flags = self.read_flags(self.cycle_flags)
-    if self.verbose:
-      print "WcycleID:", self.state['wcycleid'], "ListID:", \
-            self.state['listid'], "CycleID:", self.state['cycleid'], \
-            "Start:", self.state['start']
-      print "Flags:", flags
-
-  def read_cycle_stop(self):
-    wcycleid = self.read_uint32_t(self.fd)
-    stop = self.read_uint32_t(self.fd)
-    flags = self.read_flags(self.cycle_flags)
-    if self.verbose:
-      print "WCycleID:", wcycleid, "Stop:", stop
-      print "Flags:", flags
-
-  def read_header(self):
-    """ read warts object header """
-    buf = self.fd.read(8)
-    if len(buf) != 8:
-      return (-1, -1)
-    (magic, obj, length) = struct.unpack('!HHI', buf)
-    if self.verbose:
-      print "Magic: %02X Obj: %02X Len: %02x" % (magic, obj, length)
-    assert(magic == 0x1205)
-    return (obj, length)
-
-  def read_old_address(self):
-    """ Read a warts deprecated (type 5) style referenced address """
-    # deprecated address references start at 1
-    addr_id = len(self.address_ref) + 1
-    id_mod = self.read_uint8_t(self.fd)
-    typ = self.read_uint8_t(self.fd)
-    # "reader...can sanity check the ID number it determines by comparing the
-    # lower 8 bits of the computed ID with the ID that is embedded in the record"
-    assert(addr_id % 255 == id_mod)
-    if typ == 0x01:
-      addr = self.fd.read(4)
-      quad = socket.inet_ntop(socket.AF_INET, addr) 
-    elif typ == 0x02:
-      addr = self.fd.read(16)
-      quad = socket.inet_ntop(socket.AF_INET6, addr) 
-    else:
-      print >> sys.stderr, "Addr type:", typ, "not implemented:", self.wartsfile
-      assert False
-    self.address_ref[addr_id] = quad
-    #print "Address ID:", addr_id, "->", quad
-
-  def read_address(self, fd):
-    """ read a warts-style ip/mac address """
-    length = WartsReader.read_uint8_t(self.fd)
-    addr = 0
-    typ = 0
-    # an embedded (non-referenced) address
-    if length != 0:
-      typ = WartsReader.read_uint8_t(fd)
-      addr = self.fd.read(length)
-      addr_id = len(self.address_ref)
-      self.address_ref[addr_id] = addr 
-    # a referenced address
-    else:
-      addr_id = WartsReader.read_uint32_t(fd)
-      try:
-        addr = self.address_ref[addr_id]
-      except:
-        print "Die: couldn't find referenced address %d" % addr_id
-        sys.exit(-1)
-    if typ == 0:
-      if len(addr) == 4: typ = 1
-      if len(addr) == 16: typ = 2
-    if typ == 1:
-      return socket.inet_ntop(socket.AF_INET, addr)
-    elif typ == 2:
-      return socket.inet_ntop(socket.AF_INET6, addr)
-    else:
-      print >> sys.stderr, "Addr type:", typ, "not implemented:", self.wartsfile
-      print >> sys.stderr, "Length:", length, "Len addr:", len(addr)
-      assert False
-
-  def read_referenced_address(self):
-    """ Resolve a warts deprecated (type 5) style referenced address """
-    addr_id = self.read_uint32_t(self.fd)
-    assert (addr_id in self.address_ref)
-    addr = self.address_ref[addr_id]
-    return addr
+    self.flag_defines = []
+    self.flags = dict()
+    self.verbose = verbose
+    self.flagdata = ""
+    self.referenced_address = dict()
 
   @staticmethod
   def more_flags(b):
@@ -363,31 +76,285 @@ class WartsReader(object):
     return (b & 0x80 == 0x80)
 
   @staticmethod
-  def hexdump(buf):
-    return ''.join('{:02x}'.format(ord(x)) for x in buf)
-  
-  @staticmethod
   def bit_set(b, i):
     """ Warts flag magic: is the i'th bit of byte b set to 1? """
     return ( (b >> (i-1)) & 0x01 == 0x01)
 
-  @staticmethod
-  def read_uint8_t(f):
-    return (struct.unpack('B', f.read(1)))[0]
+  def read_flags(self, debug=False):
+    """ Warts flag magic. """
+    flags_set = []
+    current_byte = 0
+    byte = 0
+    for byte in range(len(self.flagdata)):
+      flag = ord(self.flagdata[byte])
+      flags_set += [self.bit_set(flag, i) for i in range(1,8)]
+      if not self.more_flags(flag): break
+    current_byte += byte + 1
+    if debug: print "Flags Set:", flags_set, len(flags_set)
+    flags = dict()
+    if flag > 0 or len(flags_set) > 8:
+      paramlen = unpack_uint16_t(self.flagdata[current_byte:current_byte+2])[0]
+      current_byte+=2
+      for i in range(len(flags_set)):
+        if (flags_set[i]):
+          if (i >= len(self.flag_defines)):
+            print "** UNKNOWN FLAG: %d" % (i+1)
+            sys.exit(-1)
+          read_cb = self.flag_defines[i][1]
+          (val, bytes_read) = read_cb(self.flagdata[current_byte:])
+          current_byte+=bytes_read
+          if debug: print "Flag %d: %s %s" % (i+1, self.flag_defines[i][0], val)
+          self.flags[self.flag_defines[i][0]] = val
+    return current_byte
 
-  @staticmethod
-  def read_uint16_t(f):
-    return (struct.unpack('!H', f.read(2)))[0]
+  def update_ref(self, _referenced_address):
+    self.referenced_address = _referenced_address
 
-  @staticmethod
-  def read_uint32_t(f):
-    return (struct.unpack('!I', f.read(4)))[0]
+  def unpack_address(self, b):
+    """ read a warts-style ip/mac address """
+    bytes_read = 0
+    (length, r) = unpack_uint8_t(b[bytes_read])
+    bytes_read+=r
+    #addr = 0
+    # an embedded (non-referenced) address
+    if length != 0:
+      (typ, r) = unpack_uint8_t(b[bytes_read])
+      bytes_read+=r
+      addr = b[bytes_read:bytes_read+length]
+      bytes_read+=length
+      addr_id = len(self.referenced_address)
+      self.referenced_address[addr_id] = addr 
+    # a referenced address
+    else:
+      (addr_id, r) = unpack_uint32_t(b[bytes_read:])
+      bytes_read+=r
+      try:
+        addr = self.referenced_address[addr_id]
+      except:
+        print "Die: couldn't find referenced address %d" % addr_id
+        sys.exit(-1)
+    if len(addr) == 4:
+      return (socket.inet_ntop(socket.AF_INET, addr), bytes_read)
+    elif len(addr) == 16:
+      return (socket.inet_ntop(socket.AF_INET6, addr), bytes_read)
+    else:
+      assert False
 
-  @staticmethod
-  def read_timeval(f):
-    sec = WartsReader.read_uint32_t(f)
-    usec = WartsReader.read_uint32_t(f)
-    return (sec + usec/1000000.0)
+  def read_referenced_address(self, b):
+    """ Resolve a warts deprecated (type 5) style referenced address """
+    bytes_read = 0
+    (addr_id, r) = unpack_uint32_t(b)
+    bytes_read+=r
+    assert (addr_id in self.referenced_address)
+    addr = self.referenced_address[addr_id]
+    return (addr, bytes_read)
+
+
+class WartsList(WartsBaseObject):
+  def __init__(self, data, verbose=False):
+    super(WartsList, self).__init__(obj_type['LIST'], verbose)
+    self.data = data
+    self.flag_defines = [
+     ('description', read_string),
+     ('monitor', read_string),
+    ]
+    (self.wlistid, self.listid) = struct.unpack('!II', data[:8])
+    if len(data) > 8:
+      (self.name, read_len) = read_string(data[8:])
+      self.flagdata = data[8+read_len:]
+    flag_bytes = self.read_flags()
+    if self.verbose:
+      print "WlistID:", self.wlistid, "ListID:",  self.listid, \
+            "Name:", self.name
+      print "Flags:", self.flags
+
+
+class WartsCycle(WartsBaseObject):
+  def __init__(self, data, verbose=False):
+    super(WartsCycle, self).__init__(obj_type['CYCLE'], verbose)
+    self.data = data
+    self.flag_defines = [
+     ('stoptime', unpack_uint32_t),
+     ('hostname', read_string),
+    ]
+    (self.wcycleid, self.listid, self.cycleid, self.start) = struct.unpack('!IIII', data[:16])
+    self.flagdata = data[16:]
+    self.read_flags()
+    # be consistent in populating srcaddr/dstaddr even when deprecated addrs used
+    if ('srcipid' in self.flags) and ('srcaddr' not in self.flags):
+      self.flags['srcaddr'] = self.flags['srcipid']
+    if ('dstipid' in self.flags) and ('dstaddr' not in self.flags):
+      self.flags['dstaddr'] = self.flags['dstipid']
+    if self.verbose:
+      print "WcycleID:", self.wcycleid, "ListID:",  self.listid, \
+            "CycleID:", self.cycleid, "Start:", self.start
+      print "Flags:", self.flags
+
+
+class WartsPing(WartsBaseObject):
+  def __init__(self, data, verbose=False):
+    super(WartsPing, self).__init__(obj_type['PING'], verbose)
+    self.data = data
+    self.flagdata = data
+    self.hops = []
+    self.flag_defines = [
+     ('listid', unpack_uint32_t),
+     ('cycleid', unpack_uint32_t),
+     ('srcipid', None), #read_referenced_address),
+     ('dstipid', None), #read_referenced_address),
+     ('timeval', read_timeval),
+     ('stopreas', unpack_uint8_t),
+     ('stopdata', unpack_uint8_t),
+     ('datalen', unpack_uint16_t),
+     ('data', unpack_uint8_t),
+     ('pcount', unpack_uint16_t),
+     ('size', unpack_uint16_t),
+     ('wait', unpack_uint8_t),
+     ('ttl', unpack_uint8_t),
+     ('rcount', unpack_uint16_t),
+     ('psent', unpack_uint16_t),
+     ('method', unpack_uint8_t),
+     ('sport', unpack_uint16_t),
+     ('dport', unpack_uint16_t),
+     ('userid', unpack_uint32_t),
+     ('srcaddr', self.unpack_address),
+     ('dstaddr', self.unpack_address),
+     ('flags', unpack_uint8_t),
+     ('tos', unpack_uint8_t),
+     ('tsps', self.unpack_address),
+     ('icmpsum', unpack_uint16_t),
+     ('pmtu', unpack_uint16_t),
+     ('timeout', unpack_uint8_t),
+     ('waitus', unpack_uint32_t),
+    ]
+    flag_bytes = self.read_flags()
+    self.records = unpack_uint16_t(data[flag_bytes:])[0]
+    if self.verbose:
+      print "Ping Params:", self.flags
+    offset = flag_bytes+2 
+    for record in range(self.records):
+      w = WartsPingReply(data[offset:], self.referenced_address, self.verbose)
+      self.hops.append(w.flags)
+      offset+=w.flag_bytes
+      if self.verbose: print "Reply %d: %s" % (record+1, w.flags)
+
+
+class WartsPingReply(WartsBaseObject):
+  def __init__(self, data, refs, verbose=False):
+    super(WartsPingReply, self).__init__(obj_type['PING'], verbose)
+    self.update_ref(refs)
+    self.flagdata = data
+    self.flag_defines = [
+     ('dstipid', None), #read_referenced_address),
+     ('flags', unpack_uint8_t),
+     ('replyttl', unpack_uint8_t),
+     ('replysize', unpack_uint16_t),
+     ('icmp', unpack_uint16_t),
+     ('rtt', unpack_uint32_t),
+     ('probeid', unpack_uint16_t),
+     ('replyipid', unpack_uint16_t),
+     ('probeipid', unpack_uint16_t),
+     ('replyproto', unpack_uint8_t),
+     ('tcpflags', unpack_uint8_t),
+     ('addr', self.unpack_address),
+     ('v4rr', self.unpack_address),
+     ('v4ts', self.unpack_address),
+     ('replyipid32', unpack_uint32_t),
+     ('tx', read_timeval),
+     ('tsreply', unpack_uint32_t), # broken; should read 12B
+    ]
+    self.flag_bytes = self.read_flags()
+
+
+class WartsTrace(WartsBaseObject):
+  def __init__(self, data, verbose=False):
+    super(WartsTrace, self).__init__(obj_type['TRACE'], verbose)
+    self.data = data
+    self.flagdata = data
+    self.hops = []
+    self.flag_defines = [
+     ('listid', unpack_uint32_t),
+     ('cycleid', unpack_uint32_t),
+     ('srcipid', None), #read_referenced_address),
+     ('dstipid', None), #read_referenced_address),
+     ('timeval', read_timeval),
+     ('stopreas', unpack_uint8_t),
+     ('stopdata', unpack_uint8_t),
+     ('traceflg', unpack_uint8_t),
+     ('attempts', unpack_uint8_t),
+     ('hoplimit', unpack_uint8_t),
+     ('tracetyp', unpack_uint8_t),
+     ('probesiz', unpack_uint16_t),
+     ('srcport', unpack_uint16_t),
+     ('dstport', unpack_uint16_t),
+     ('firsttl', unpack_uint8_t),
+     ('iptos', unpack_uint8_t),
+     ('timeout', unpack_uint8_t),
+     ('loops', unpack_uint8_t),
+     ('probehop', unpack_uint16_t),
+     ('gaplimit', unpack_uint8_t),
+     ('gaprch', unpack_uint8_t),
+     ('loopfnd', unpack_uint8_t),
+     ('probesent', unpack_uint16_t),
+     ('minwait', unpack_uint8_t),
+     ('confid', unpack_uint8_t),
+     ('srcaddr', self.unpack_address),
+     ('dstaddr', self.unpack_address),
+     ('usrid', unpack_uint32_t),
+    ]
+    flag_bytes = self.read_flags()
+    self.records = unpack_uint16_t(data[flag_bytes:])[0]
+    if self.verbose:
+      print "Flags:", self.flags
+      print "Hops recorded:", self.records
+    offset = flag_bytes+2 
+    for record in range(self.records):
+      w = WartsTraceHop(data[offset:], self.referenced_address, self.verbose)
+      self.hops.append(w.flags)
+      offset+=w.flag_bytes
+
+class WartsTraceHop(WartsBaseObject):
+  def __init__(self, data, refs, verbose=False):
+    super(WartsTraceHop, self).__init__(obj_type['TRACE'], verbose)
+    self.update_ref(refs)
+    self.flagdata = data
+    self.flag_defines = [
+     ('addrid', self.read_referenced_address),
+     ('probettl', unpack_uint8_t),
+     ('replyttl', unpack_uint8_t),
+     ('hopflags', unpack_uint8_t),
+     ('probeid', unpack_uint8_t),
+     ('rtt', unpack_uint32_t),
+     ('icmp', unpack_uint16_t),       # type, code
+     ('probesize', unpack_uint16_t),
+     ('replysize', unpack_uint16_t),
+     ('ipid', unpack_uint16_t),
+     ('tos', unpack_uint8_t),
+     ('mtu', unpack_uint16_t),
+     ('qlen', unpack_uint16_t),
+     ('qttl', unpack_uint8_t),
+     ('tcpflags', unpack_uint8_t),
+     ('qtos', unpack_uint8_t),
+     ('icmpext', self.read_icmpext),
+     ('addr', self.unpack_address),
+     ('tx', read_timeval),
+    ]
+    self.flag_bytes = self.read_flags()
+    if ('addrid' in self.flags) and ('addr' not in self.flags):
+      self.flags['addr'] = self.flags['addrid']
+    # IPID flag not set if IPID is zero
+    if ('ipid' not in self.flags):
+      self.flags['ipid'] = 0
+    # the quoted TTL is assumed to be 1 unless the q-ttl flag is set
+    if ('qttl' not in self.flags):
+      self.flags['qttl'] = 1 
+    # the 2B icmp field encodes type (1B) and code (1B).  decode.
+    if ('icmp' in self.flags):
+      self.flags['icmp-type'] = self.flags['icmp'] >> 8
+      self.flags['icmp-code'] = self.flags['icmp'] & 0xFF
+      del self.flags['icmp']
+    if self.verbose:
+      print "\t", self.flags
 
   @staticmethod
   # copied blindly/stupidly from scamper/scamper_icmpext.h
@@ -409,63 +376,103 @@ class WartsReader(object):
     return extension
 
   @staticmethod
-  def read_icmpext(f):
+  def read_icmpext(b):
     """ read ICMP extension header """
-    tot_len = WartsReader.read_uint16_t(f)
+    current_byte = 0
+    (tot_len, bytes_read) = unpack_uint16_t(b[current_byte:current_byte+2])
     ret_string = ""
     #print "ICMP Extension Total Len:", tot_len
-    while tot_len > 0:
-      ie_dl = WartsReader.read_uint16_t(f)  # data length
+    current_byte+=bytes_read
+    remaining = tot_len
+    while remaining > 0:
+      (ie_dl, bytes_read) = unpack_uint16_t(b[current_byte:current_byte+2])  # data length
+      current_byte+=bytes_read
       #print "data len:", ie_dl
-      ie_cn = WartsReader.read_uint8_t(f)   # class number
+      (ie_cn, bytes_read) = unpack_uint8_t(b[current_byte:current_byte+1])  # class number
+      current_byte+=bytes_read
       #print "class num:", ie_cn
-      ie_ct = WartsReader.read_uint8_t(f)   # class type
+      (ie_ct, bytes_read) = unpack_uint8_t(b[current_byte:current_byte+1])  # class type
+      current_byte+=bytes_read
       #print "class type:", ie_ct
       # is MPLS?
       if ie_cn == 1 and ie_ct == 1:
         ie_dl_read = ie_dl
         while ie_dl_read >= 4:
-          buf = f.read(4)
+          buf = b[current_byte:current_byte+4]
+          current_byte+=4
           ie_dl_read-=4
-          ret_string += WartsReader.parse_mpls_icmpext(buf) + "\n"
+          ret_string += WartsTraceHop.parse_mpls_icmpext(buf) + "\n"
       # we don't understand this type.  return a hexdump.
       else:
-        buf = f.read(ie_dl)
-        ret_string += "buf: " + WartsReader.hexdump(buf)
-      tot_len = tot_len - 4 - ie_dl
-    return ret_string
+        buf = b[current_byte:current_byte+ie_dl]
+        current_byte+=ie_dl
+        ret_string += "buf: " + hexdump(buf)
+      remaining = remaining - 4 - ie_dl
+    return (ret_string, tot_len+2)
 
-  @staticmethod
-  def read_string(f):
-    """ read a null terminated string """
-    s = ''
+
+class WartsReader(object):
+  def __init__(self, wartsfile, verbose=False):
+    self.address_ref = dict()
+    self.verbose = verbose
+    # Auto-detect if warts file is using deprecated, type=5 addresses
+    self.deprecated_addresses = False
+    self.wartsfile = wartsfile
+    self.warts_open(self.wartsfile)
+
+  def warts_open(self, infile):
+    self.fd = None
+    # try reading as a bz2 file
+    try:
+      self.fd = bz2.BZ2File(infile, 'rb')
+      self.fd.read(1)
+      self.fd = bz2.BZ2File(infile, 'rb')
+      return self.fd
+    except IOError, e:
+      pass
+    # try reading as a gzip file
+    try:
+      self.fd = gzip.open(infile, 'rb')
+      self.fd.read(1)
+      self.fd = gzip.open(infile, 'rb')
+      return self.fd
+    except IOError, e:
+      pass
+    self.fd = open(infile, 'rb')
+    return self.fd
+
+  def next(self):
     while True:
-      b = f.read(1)
-      if len(b) != 1: break
-      if ord(b) == 0x00: break
-      s += b
-    return s
+      obj = self.next_object()
+      if not obj: 
+        return (False, False)
+      if (obj.typ == obj_type['TRACE']) or (obj.typ == obj_type['PING']):
+        return (obj.flags, obj.hops)
 
+  def next_object(self):
+    # read warts object header 
+    self.header = self.fd.read(8)
+    # sanity check
+    if len(self.header) != 8:
+      return None
+    (magic, typ, length) = struct.unpack('!HHI', self.header)
+    if self.verbose:
+      print "Magic: %02X Obj: %02X Len: %02x" % (magic, typ, length)
+    assert(magic == obj_type['MAGIC'])
+    # read remainder of object
+    data = self.fd.read(length)
+    if typ == obj_type['LIST']:
+      return WartsList(data, verbose=self.verbose)
+    elif typ == obj_type['CYCLE']:
+      return WartsCycle(data, verbose=self.verbose)
+    elif typ == obj_type['TRACE']:
+      return WartsTrace(data, verbose=self.verbose)
+    elif typ == obj_type['PING']:
+      return WartsPing(data, verbose=self.verbose)
+    else:
+      print "Unsupported object: %02x Len: %d" % (typ, length)
+      assert False
 
-def warts_open(infile):
-  fd = None
-  # try reading as a bz2 file
-  try:
-    fd = bz2.BZ2File(infile, 'rb')
-    fd.read(1)
-    fd = bz2.BZ2File(infile, 'rb')
-    return fd
-  except IOError, e:
-    pass
-  # try reading as a gzip file
-  try:
-    fd = gzip.open(infile, 'rb')
-    fd.read(1)
-    fd = gzip.open(infile, 'rb')
-    return fd
-  except IOError, e:
-    pass
-  return open(infile, 'rb')
 
 
 if __name__ == "__main__":
