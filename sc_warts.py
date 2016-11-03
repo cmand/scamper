@@ -168,7 +168,7 @@ class WartsReader(object):
     while True:
       (obj, self.record_len) = self.read_header()
       if obj == -1: return (False, False)
-      #print "Object: %02x Len: %d" % (obj, length)
+      #print "Object: %02x Len: %d" % (obj, self.record_len)
       if obj == 0x01: self.read_list()
       elif obj == 0x02: self.read_cycle()
       elif obj == 0x03: self.read_cycle()
@@ -428,10 +428,10 @@ class WartsReader(object):
           buf = f.read(4)
           ie_dl_read-=4
           ret_string += WartsReader.parse_mpls_icmpext(buf) + "\n"
+      # we don't understand this type.  return a hexdump.
       else:
         buf = f.read(ie_dl)
         ret_string += "buf: " + WartsReader.hexdump(buf)
-        sys.exit(-1)
       tot_len = tot_len - 4 - ie_dl
     return ret_string
 
