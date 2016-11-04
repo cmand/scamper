@@ -34,7 +34,7 @@ import socket
 import gzip, bz2
 import sys
 
-obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLE' : 0x03,
+obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLESTART' : 0x02, 'CYCLE' : 0x03,
             'TRACE' : 0x06, 'PING' : 0x07, 'MAGIC' : 0x1205}
 
 def unpack_uint8_t(b):
@@ -463,6 +463,8 @@ class WartsReader(object):
     data = self.fd.read(length)
     if typ == obj_type['LIST']:
       return WartsList(data, verbose=self.verbose)
+    elif typ == obj_type['CYCLESTART']:
+      return WartsCycle(data, verbose=self.verbose)
     elif typ == obj_type['CYCLE']:
       return WartsCycle(data, verbose=self.verbose)
     elif typ == obj_type['TRACE']:
@@ -471,8 +473,7 @@ class WartsReader(object):
       return WartsPing(data, verbose=self.verbose)
     else:
       print "Unsupported object: %02x Len: %d" % (typ, length)
-      assert False
-
+      sys.exit(-1)
 
 
 if __name__ == "__main__":
