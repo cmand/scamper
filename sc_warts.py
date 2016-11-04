@@ -29,6 +29,12 @@
 # Author:       Robert Beverly <rbeverly@cmand.org>
 # Description:  Parse a binary warts capture according to warts.5
 #
+
+__author__ = 'Robert Beverly <rbeverly@cmand.org>'
+__copyright__ = 'Copyright (c) 2015-2016 Robert Beverly'
+__url__ = 'https://github.com/cmand/scamper'
+__version__ = 1.2
+
 import struct
 import socket
 import gzip, bz2
