@@ -99,7 +99,7 @@ class WartsTraceBoxPkt(WartsBaseObject):
     self.update_ref(refs)
     self.flagdata = data
     self.flag_defines = [
-    ('dir', unpack_uint8_t),
+     ('dir', unpack_uint8_t),
      ('time', read_timeval),
      ('len', unpack_uint16_t),
      ('data', self.read_pass),
@@ -115,6 +115,7 @@ class WartsTraceBoxPkt(WartsBaseObject):
   def read_tracebox_pkt(self, data):
     fields = dict()
     ip = dpkt.ip.IP(data)
+    fields['hop'] = socket.inet_ntoa(ip.src)
     if ip.p == dpkt.ip.IP_PROTO_ICMP:
       # This is a reply from a hop
       fields['hop'] = socket.inet_ntoa(ip.src)
@@ -157,10 +158,29 @@ class WartsTraceBoxPkt(WartsBaseObject):
         fields['TCP::Offset'] = hex(tcp.off)
         fields['TCP::Flags'] = hex(tcp.flags)
         fields['TCP::Window'] = hex(tcp.win)
-      if len(ip.data) >= 20:
+      if len(ip.data) == 20:
         fields['TCP::Checksum'] = hex(tcp.sum)
         fields['TCP::UrgentPtr'] = hex(tcp.urp)
+      if len(ip.data) >= 20:
+        if len(tcp.opts) > 0:
+          opts = dpkt.tcp.parse_opts(tcp.opts)
+          for o,d in opts:
+            if o == dpkt.tcp.TCP_OPT_EOL:
+              fields['TCP::OPT_EOL'] = d
+            elif o == dpkt.tcp.TCP_OPT_NOP:
+              fields['TCP::OPT_NOP'] = d
+            elif o == dpkt.tcp.TCP_OPT_MSS:
+              fields['TCP::OPT_MSS'] = d
+            elif o == dpkt.tcp.TCP_OPT_WSCALE:
+              fields['TCP::OPT_WSCALE'] = d
+            elif o == dpkt.tcp.TCP_OPT_SACKOK:
+              fields['TCP::OPT_SACKOK'] = d
+            elif o == dpkt.tcp.TCP_OPT_SACK:
+              fields['TCP::OPT_SACK'] = d
+            elif o == dpkt.tcp.TCP_OPT_TIMESTAMP:
+              fields['TCP::OPT_TIMESTAMP'] = d
     return fields
+
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
@@ -182,8 +202,10 @@ if __name__ == "__main__":
         last_tx = pkt['data']
         last_tx_ts = pkt['time']
       else: #RX
+        #print " RX at %1.3f:" % (ts)
         i+=1
         rtt = (pkt['time'] - last_tx_ts)*1000.0
-        diff = dict_diff(last_tx, pkt['data']) 
-        print " %d: %s RTT:%1.3f: %s" % (i, pkt['data']['hop'], rtt, " ".join(diff.keys()))
+        if last_tx:
+          diff = dict_diff(last_tx, pkt['data'])
+          print " %d: %s RTT:%1.3f: %s" % (i, pkt['data']['hop'], rtt, " ".join(diff.keys()))
         last_tx = None
