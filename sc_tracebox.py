@@ -54,6 +54,8 @@ class WartsTraceBoxReader(WartsReader):
       return WartsCycle(data, verbose=self.verbose)
     elif typ == obj_type['CYCLE']:
       return WartsCycle(data, verbose=self.verbose)
+    elif typ == obj_type['CYCLE_STOP']:
+      return WartsCycleStop(data, verbose=self.verbose)
     elif typ == TRACEBOXTYPE:
       return WartsTraceBox(data, verbose=self.verbose) 
     else:

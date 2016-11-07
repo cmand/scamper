@@ -41,7 +41,7 @@ import gzip, bz2
 import sys
 
 obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLESTART' : 0x02, 'CYCLE' : 0x03,
-            'TRACE' : 0x06, 'PING' : 0x07, 'MAGIC' : 0x1205}
+            'CYCLE_STOP': 0x04, 'TRACE' : 0x06, 'PING' : 0x07, 'MAGIC' : 0x1205}
 
 def unpack_uint8_t(b):
   return (struct.unpack('B', b[0])[0], 1)
@@ -195,6 +195,14 @@ class WartsCycle(WartsBaseObject):
       print "WcycleID:", self.wcycleid, "ListID:",  self.listid, \
             "CycleID:", self.cycleid, "Start:", self.start
       print "Flags:", self.flags
+
+class WartsCycleStop(WartsBaseObject):
+  def __init__(self, data, verbose=False):
+    super(WartsCycleStop, self).__init__(obj_type['CYCLE_STOP'], verbose)
+    self.data = data
+    (self.cycleid, self.stop) = struct.unpack('!II', data[:8])
+    if self.verbose:
+      print "CycleID:", self.cycleid, "Stop:", self.stop
 
 
 class WartsPing(WartsBaseObject):
