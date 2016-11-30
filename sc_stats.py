@@ -7,7 +7,17 @@
 #
 import sys
 import time
-from sc_warts import WartsReader
+from math import sqrt
+from sc_warts import WartsReader, obj_type
+
+def basic(vals):
+  n = len(vals)/1.0
+  mean = sum(vals)/n
+  ss = sum((x-mean)**2 for x in vals)
+  stddev = 0.0
+  if n > 1:
+    stddev = sqrt(ss/n)
+  return (min(vals), mean, max(vals), stddev)
 
 class WartsStats(WartsReader):
   def __init__(self, wartsfile, verbose=False):
@@ -35,14 +45,11 @@ class WartsStats(WartsReader):
   def elapsed(self):
     return self.ts_end - self.ts_begin
 
-
   """ Takes a list of warts hops from a WartsReader. Returns 
       sequential IP path list, along with a dictionary
       of RTTs and meta data (indexed by TTL) """
-  def next_trace(self):
-    (flags, hops) = self.next()
-    if flags == False:
-      return (None, None, None, None)
+  def do_trace(self, obj):
+    (flags, hops) = (obj.flags, obj.hops)
 
     ts = flags['timeval']
     if ts > self.ts_end: self.ts_end = ts
@@ -74,6 +81,21 @@ class WartsStats(WartsReader):
           self.dict_append(meta, i, "!N")
     return (flags, ips, rtts, meta)
 
+  def do_ping(self, obj):
+    (flags, responses) = (obj.flags, obj.hops)
+    return (flags, responses)
+
+  def next(self):
+    obj = None
+    while True:
+      obj = self.next_object()
+      if not obj:
+        return (None, None)
+      elif obj.typ == obj_type['PING']:
+        return (obj.typ, self.do_ping(obj))
+      elif obj.typ == obj_type['TRACE']:
+        return (obj.typ, self.do_trace(obj))
+
   @staticmethod
   def addhop(lasthop, hop, interfaces, edges, ignore_anon=True):
     interfaces.add(hop)
@@ -94,7 +116,12 @@ class WartsStats(WartsReader):
     edges = set()  # Edges
     cnt = 0
     while True:
-      (flags, ips, rtts, meta) = self.next_trace()
+      (typ, data) = self.next()
+      if typ == None: 
+        break
+      if typ != obj_type['TRACE']:
+        continue
+      (flags, ips, rtts, meta) = data
       if flags == None: break
       cnt+=1
       dests.add(flags['dstaddr'])
