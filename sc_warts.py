@@ -41,7 +41,8 @@ import gzip, bz2
 import sys
 
 obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLESTART' : 0x02, 'CYCLE' : 0x03,
-            'CYCLE_STOP': 0x04, 'TRACE' : 0x06, 'PING' : 0x07, 'MAGIC' : 0x1205}
+            'CYCLE_STOP': 0x04, 'ADDRESS': 0x05, 'TRACE' : 0x06, 'PING' : 0x07,
+            'MAGIC' : 0x1205}
 
 def unpack_uint8_t(b):
   return (struct.unpack('B', b[0])[0], 1)
@@ -111,6 +112,11 @@ class WartsBaseObject(object):
           current_byte+=bytes_read
           if debug: print "Flag %d: %s %s" % (i+1, self.flag_defines[i][0], val)
           self.flags[self.flag_defines[i][0]] = val
+    # be consistent in populating srcaddr/dstaddr for deprecated addrs
+    if ('srcipid' in self.flags) and ('srcaddr' not in self.flags):
+      self.flags['srcaddr'] = self.flags['srcipid']
+    if ('dstipid' in self.flags) and ('dstaddr' not in self.flags):
+      self.flags['dstaddr'] = self.flags['dstipid']
     return current_byte
 
   def update_ref(self, _referenced_address):
@@ -154,6 +160,22 @@ class WartsBaseObject(object):
     assert (addr_id in self.referenced_address)
     addr = self.referenced_address[addr_id]
     return (addr, bytes_read)
+
+
+class WartsDeprecatedAddress:
+  """ Read a warts deprecated (type 5) address object """
+  def __init__(self, data, verbose=False):
+    self.typ = obj_type['ADDRESS']
+    self.data = data
+    self.addr = ""
+    (self.id, self.type) = struct.unpack('BB', data[:2])
+    if self.type == 0x01:
+      self.addr = socket.inet_ntop(socket.AF_INET, data[2:6])
+    elif self.type == 0x02:
+      self.addr = socket.inet_ntop(socket.AF_INET6, data[2:18])
+    else:
+      print >> sys.stderr, "Addr type:", self.type, "not implemented."
+      assert False
 
 
 class WartsList(WartsBaseObject):
@@ -206,16 +228,18 @@ class WartsCycleStop(WartsBaseObject):
 
 
 class WartsPing(WartsBaseObject):
-  def __init__(self, data, verbose=False):
+  def __init__(self, data, refs=None, verbose=False):
     super(WartsPing, self).__init__(obj_type['PING'], verbose)
+    if refs:
+      self.update_ref(refs)
     self.data = data
     self.flagdata = data
     self.hops = []
     self.flag_defines = [
      ('listid', unpack_uint32_t),
      ('cycleid', unpack_uint32_t),
-     ('srcipid', None), #read_referenced_address),
-     ('dstipid', None), #read_referenced_address),
+     ('srcipid', read_referenced_address),
+     ('dstipid', read_referenced_address),
      ('timeval', read_timeval),
      ('stopreas', unpack_uint8_t),
      ('stopdata', unpack_uint8_t),
@@ -259,7 +283,7 @@ class WartsPingReply(WartsBaseObject):
     self.update_ref(refs)
     self.flagdata = data
     self.flag_defines = [
-     ('dstipid', None), #read_referenced_address),
+     ('dstipid', read_referenced_address),
      ('flags', unpack_uint8_t),
      ('replyttl', unpack_uint8_t),
      ('replysize', unpack_uint16_t),
@@ -281,16 +305,18 @@ class WartsPingReply(WartsBaseObject):
 
 
 class WartsTrace(WartsBaseObject):
-  def __init__(self, data, verbose=False):
+  def __init__(self, data, refs=None, verbose=False):
     super(WartsTrace, self).__init__(obj_type['TRACE'], verbose)
+    if refs:
+      self.update_ref(refs)
     self.data = data
     self.flagdata = data
     self.hops = []
     self.flag_defines = [
      ('listid', unpack_uint32_t),
      ('cycleid', unpack_uint32_t),
-     ('srcipid', None), #read_referenced_address),
-     ('dstipid', None), #read_referenced_address),
+     ('srcipid', self.read_referenced_address),
+     ('dstipid', self.read_referenced_address),
      ('timeval', read_timeval),
      ('stopreas', unpack_uint8_t),
      ('stopdata', unpack_uint8_t),
@@ -482,9 +508,18 @@ class WartsReader(object):
     elif typ == obj_type['CYCLE']:
       return WartsCycle(data, verbose=self.verbose)
     elif typ == obj_type['TRACE']:
-      return WartsTrace(data, verbose=self.verbose)
+      return WartsTrace(data, refs=self.address_ref, verbose=self.verbose)
     elif typ == obj_type['PING']:
-      return WartsPing(data, verbose=self.verbose)
+      return WartsPing(data, refs=self.address_ref, verbose=self.verbose)
+    elif typ == obj_type['ADDRESS']:
+      self.deprecated_addresses = True
+      wd = WartsDeprecatedAddress(data, verbose=self.verbose)
+      addr_id = len(self.address_ref) + 1
+      # "reader..can sanity check the ID number it determines by comparing
+      #  the lower 8 bits of the computed ID with the ID embedded in the record"
+      assert (addr_id % 255 == wd.id)
+      self.address_ref[addr_id] = wd.addr 
+      return wd
     else:
       print "Unsupported object: %02x Len: %d" % (typ, length)
       sys.exit(-1)
