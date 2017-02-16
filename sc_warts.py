@@ -157,8 +157,9 @@ class WartsBaseObject(object):
     bytes_read = 0
     (addr_id, r) = unpack_uint32_t(b)
     bytes_read+=r
-    assert (addr_id in self.referenced_address)
-    addr = self.referenced_address[addr_id]
+    addr = addr_id
+    if addr_id in self.referenced_address:
+      addr = self.referenced_address[addr_id]
     return (addr, bytes_read)
 
 
