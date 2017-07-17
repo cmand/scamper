@@ -86,8 +86,9 @@ class WartsStats(WartsReader):
 #        elif hop['icmp-type'] == 3:
 #          self.dict_append(meta, i, "<" + str(hop['icmp-code']) + ">")
     # add gapped hops
-    for q in range(i, flags['probehop']):
-      ips.append("*")
+    if 'probehop' in flags:
+      for q in range(i, flags['probehop']):
+        ips.append("*")
     return (flags, ips, rtts, meta)
 
   def do_ping(self, obj):
