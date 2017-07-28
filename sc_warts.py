@@ -41,7 +41,7 @@ import gzip, bz2
 import sys
 
 obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLESTART' : 0x02, 'CYCLE' : 0x03,
-            'CYCLE_STOP': 0x04, 'ADDRESS': 0x05, 'TRACE' : 0x06, 'PING' : 0x07,
+            'CYCLESTOP': 0x04, 'ADDRESS': 0x05, 'TRACE' : 0x06, 'PING' : 0x07,
             'MAGIC' : 0x1205}
 
 def unpack_uint8_t(b):
@@ -221,7 +221,7 @@ class WartsCycle(WartsBaseObject):
 
 class WartsCycleStop(WartsBaseObject):
   def __init__(self, data, verbose=False):
-    super(WartsCycleStop, self).__init__(obj_type['CYCLE_STOP'], verbose)
+    super(WartsCycleStop, self).__init__(obj_type['CYCLESTOP'], verbose)
     self.data = data
     (self.cycleid, self.stop) = struct.unpack('!II', data[:8])
     if self.verbose:
@@ -506,6 +506,8 @@ class WartsReader(object):
       return WartsList(data, verbose=self.verbose)
     elif typ == obj_type['CYCLESTART']:
       return WartsCycle(data, verbose=self.verbose)
+    elif typ == obj_type['CYCLESTOP']:
+      return WartsCycleStop(data, verbose=self.verbose)
     elif typ == obj_type['CYCLE']:
       return WartsCycle(data, verbose=self.verbose)
     elif typ == obj_type['TRACE']:
