@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) 2015-2016, Robert Beverly
+# Copyright (c) 2015-2018, Robert Beverly
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,8 @@ from os.path import isfile
 from bz2 import BZ2File
 
 obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLE' : 0x03, 
-             'TRACE' : 0x06, 'PING' : 0x07, 'MAGIC' : 0x1205}
+            'STOP' : 0x04, 'TRACE' : 0x06, 'PING' : 0x07, 
+            'MAGIC' : 0x1205}
 
 def pack_uint32_t(b):
   return (struct.pack('!I', b))
@@ -336,6 +337,12 @@ class WartsWriter():
       content = struct.pack('!IIII', wcycle, listid, cycleid, start)
       content += struct.pack('B', 0) # no flags
       self.write_header(content, obj_type['CYCLE'])
+
+  def write_cycle_stop(self, cycleid, stop):
+    if not self.append:
+      content = struct.pack('!II', cycleid, stop)
+      content += struct.pack('B', 0) # no flags
+      self.write_header(content, obj_type['STOP'])
 
   def write_object(self, obj):
     obj.finalize()
