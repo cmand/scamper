@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) 2015-2016, Robert Beverly
+# Copyright (c) 2015-2018, Robert Beverly
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -31,9 +31,9 @@
 #
 
 __author__ = 'Robert Beverly <rbeverly@cmand.org>'
-__copyright__ = 'Copyright (c) 2015-2016 Robert Beverly'
+__copyright__ = 'Copyright (c) 2015-2018 Robert Beverly'
 __url__ = 'https://github.com/cmand/scamper'
-__version__ = 1.2
+__version__ = 1.3
 
 import struct
 import socket
@@ -353,6 +353,31 @@ class WartsTrace(WartsBaseObject):
       w = WartsTraceHop(data[offset:], self.referenced_address, self.verbose)
       self.hops.append(w.flags)
       offset+=w.flag_bytes
+    # last-ditch data (e.g., pmtud, doubletree)
+    self.ld = unpack_uint16_t(data[offset:])[0]
+    if self.ld != 0:
+      self.ld_type = (self.ld & 0xF000) >> 12
+      self.ld_len  = (self.ld & 0x0FFF)
+      #print "Last Ditch: TYPE:", self.ld_type, "LEN:", self.ld_len
+      if self.ld_type == 3:
+        dt = WartsTraceDtree(data[offset+2:], self.referenced_address, self.verbose)
+      self.flags.update(dt.flags)
+
+class WartsTraceDtree(WartsBaseObject):
+  def __init__(self, data, refs, verbose=False):
+    super(WartsTraceDtree, self).__init__(obj_type['NONE'], verbose)
+    self.update_ref(refs)
+    self.flagdata = data
+    self.flag_defines = [
+     ('deprecated', None),
+     ('deprecated', None),
+     ('dtree_firsthop', unpack_uint8_t),
+     ('lss_stop_addr', self.unpack_address),
+     ('gss_stop_addr', self.unpack_address),
+     ('lss_name', read_string),
+     ('dtree_flags', unpack_uint8_t),
+    ]
+    self.flag_bytes = self.read_flags()
 
 class WartsTraceHop(WartsBaseObject):
   def __init__(self, data, refs, verbose=False):
