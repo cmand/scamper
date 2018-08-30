@@ -550,7 +550,9 @@ class WartsReader(object):
       return wd
     else:
       print "Unsupported object: %02x Len: %d" % (typ, length)
-      sys.exit(-1)
+      return False #with this commmand, I could run my program over several warts files, 
+      #instead of having to run my script for each file separately due to the sys.exit() instruction
+      #sys.exit(-1)
 
 
 if __name__ == "__main__":
