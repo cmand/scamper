@@ -1,9 +1,9 @@
-# Scamper Tools
+# Scamper Python Tools
 
 Scamper is a scalable, efficient, and feature-rich Internet packet
 prober from CAIDA (http://www.caida.org/tools/measurement/scamper/).
 
-Scamper is written in C and stores data in a binary "warts" format.
+Scamper stores data in a binary "warts" format.
 
 These tools replicate the functionality of scamper's utilities by
 providing native python implementations.  The following files 
@@ -17,4 +17,5 @@ are included:
 * sc_analysis_dump.py: covert scamper traces to easily parsed text
 * sc_wartsgrep.py:     create warts file containing only records of specified target
 * sc_sample.py:        sample python using warts class (for developers)
+* sc_sample_writer.py: sample python using warts_writer class (for developers)
 * sc_attach.py:        interact with scamper over control socket
