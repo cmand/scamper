@@ -614,7 +614,7 @@ class WartsTracelbReply(WartsBaseObject):
       ('flags',    unpack_uint8_t),
       ('icmptc',   unpack_uint16_t),
       ('tcpflags', unpack_uint8_t),
-      ('icmpext',  self.read_icmpext),
+      ('icmpext',  WartsTraceHop.read_icmpext),
       ('icmpqttl', unpack_uint8_t),
       ('icmpqtos', unpack_uint8_t),
       ('fromgid',  self.read_referenced_address),
@@ -623,64 +623,6 @@ class WartsTracelbReply(WartsBaseObject):
     self.offset = self.read_flags()
     if self.verbose:
       print "Reply flags:", self.flags
-
-  # TODO: maybe parse_mpls_icmpext and read_icmpext should be
-  #       moved to WartsBaseObject to avoid duplicated code
-  #       both methods are used here and in WartsTraceHop
-
-  @staticmethod
-  # copied blindly/stupidly from scamper/scamper_icmpext.h
-  def parse_mpls_icmpext(ie):
-    u32 = struct.unpack('I', ie)[0]
-    b0 = (u32 >> 0) & 0xFF
-    b1 = (u32 >> 8) & 0xFF
-    b2 = (u32 >> 16) & 0xFF
-    b3 = (u32 >> 24) & 0xFF
-    mpls_s = b2 & 0x01
-    #print "MPLS_S:", mpls_s
-    mpls_ttl = b3
-    #print "MPLS_TTL:", mpls_ttl
-    mpls_exp = (b2 >> 1) & 0x07
-    #print "MPLS_EXP:", mpls_exp
-    mpls_label = (b0 << 12) + (b1 << 4) + ((b2 >> 4) & 0xFF)
-    #print "MPLS_Label:", mpls_label
-    extension = "mpls ext ttl: %d, s: %d, exp: %d, label: %d" %  (mpls_ttl, mpls_s, mpls_exp, mpls_label)
-    return extension
-
-  @staticmethod
-  def read_icmpext(b):
-    """ read ICMP extension header """
-    current_byte = 0
-    (tot_len, bytes_read) = unpack_uint16_t(b[current_byte:current_byte+2])
-    ret_string = ""
-    #print "ICMP Extension Total Len:", tot_len
-    current_byte+=bytes_read
-    remaining = tot_len
-    while remaining > 0:
-      (ie_dl, bytes_read) = unpack_uint16_t(b[current_byte:current_byte+2])  # data length
-      current_byte+=bytes_read
-      #print "data len:", ie_dl
-      (ie_cn, bytes_read) = unpack_uint8_t(b[current_byte:current_byte+1])  # class number
-      current_byte+=bytes_read
-      #print "class num:", ie_cn
-      (ie_ct, bytes_read) = unpack_uint8_t(b[current_byte:current_byte+1])  # class type
-      current_byte+=bytes_read
-      #print "class type:", ie_ct
-      # is MPLS?
-      if ie_cn == 1 and ie_ct == 1:
-        ie_dl_read = ie_dl
-        while ie_dl_read >= 4:
-          buf = b[current_byte:current_byte+4]
-          current_byte+=4
-          ie_dl_read-=4
-          ret_string += WartsTracelbReply.parse_mpls_icmpext(buf) + "\n"
-      # we don't understand this type.  return a hexdump.
-      else:
-        buf = b[current_byte:current_byte+ie_dl]
-        current_byte+=ie_dl
-        ret_string += "buf: " + hexdump(buf)
-      remaining = remaining - 4 - ie_dl
-    return (ret_string, tot_len+2)
 
 
 class WartsReader(object):
