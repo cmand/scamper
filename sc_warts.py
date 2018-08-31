@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) 2015-2016, Robert Beverly
+# Copyright (c) 2015-2018, Robert Beverly
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -31,9 +31,9 @@
 #
 
 __author__ = 'Robert Beverly <rbeverly@cmand.org>'
-__copyright__ = 'Copyright (c) 2015-2016 Robert Beverly'
+__copyright__ = 'Copyright (c) 2015-2018 Robert Beverly'
 __url__ = 'https://github.com/cmand/scamper'
-__version__ = 1.2
+__version__ = 1.3
 
 import struct
 import socket
@@ -41,7 +41,7 @@ import gzip, bz2
 import sys
 
 obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLESTART' : 0x02, 'CYCLE' : 0x03,
-            'CYCLE_STOP': 0x04, 'ADDRESS': 0x05, 'TRACE' : 0x06, 'PING' : 0x07,
+            'CYCLESTOP': 0x04, 'ADDRESS': 0x05, 'TRACE' : 0x06, 'PING' : 0x07,
             'TRACELB': 0x08, 'MAGIC' : 0x1205}
 
 def unpack_uint8_t(b):
@@ -221,7 +221,7 @@ class WartsCycle(WartsBaseObject):
 
 class WartsCycleStop(WartsBaseObject):
   def __init__(self, data, verbose=False):
-    super(WartsCycleStop, self).__init__(obj_type['CYCLE_STOP'], verbose)
+    super(WartsCycleStop, self).__init__(obj_type['CYCLESTOP'], verbose)
     self.data = data
     (self.cycleid, self.stop) = struct.unpack('!II', data[:8])
     if self.verbose:
@@ -353,6 +353,31 @@ class WartsTrace(WartsBaseObject):
       w = WartsTraceHop(data[offset:], self.referenced_address, self.verbose)
       self.hops.append(w.flags)
       offset+=w.flag_bytes
+    # last-ditch data (e.g., pmtud, doubletree)
+    self.ld = unpack_uint16_t(data[offset:])[0]
+    if self.ld != 0:
+      self.ld_type = (self.ld & 0xF000) >> 12
+      self.ld_len  = (self.ld & 0x0FFF)
+      #print "Last Ditch: TYPE:", self.ld_type, "LEN:", self.ld_len
+      if self.ld_type == 3:
+        dt = WartsTraceDtree(data[offset+2:], self.referenced_address, self.verbose)
+      self.flags.update(dt.flags)
+
+class WartsTraceDtree(WartsBaseObject):
+  def __init__(self, data, refs, verbose=False):
+    super(WartsTraceDtree, self).__init__(obj_type['NONE'], verbose)
+    self.update_ref(refs)
+    self.flagdata = data
+    self.flag_defines = [
+     ('deprecated', None),
+     ('deprecated', None),
+     ('dtree_firsthop', unpack_uint8_t),
+     ('lss_stop_addr', self.unpack_address),
+     ('gss_stop_addr', self.unpack_address),
+     ('lss_name', read_string),
+     ('dtree_flags', unpack_uint8_t),
+    ]
+    self.flag_bytes = self.read_flags()
 
 class WartsTraceHop(WartsBaseObject):
   def __init__(self, data, refs, verbose=False):
@@ -679,6 +704,8 @@ class WartsReader(object):
       return WartsList(data, verbose=self.verbose)
     elif typ == obj_type['CYCLESTART']:
       return WartsCycle(data, verbose=self.verbose)
+    elif typ == obj_type['CYCLESTOP']:
+      return WartsCycleStop(data, verbose=self.verbose)
     elif typ == obj_type['CYCLE']:
       return WartsCycle(data, verbose=self.verbose)
     elif typ == obj_type['TRACE']:
@@ -698,7 +725,9 @@ class WartsReader(object):
       return wd
     else:
       print "Unsupported object: %02x Len: %d" % (typ, length)
-      sys.exit(-1)
+      return False #with this commmand, I could run my program over several warts files, 
+      #instead of having to run my script for each file separately due to the sys.exit() instruction
+      #sys.exit(-1)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,10 @@ class WartsStats(WartsReader):
     super(WartsStats, self).__init__(wartsfile, verbose)
     self.ts_begin = 0
     self.ts_end = 0
+    self.dests = set()  # Destinations / Targets
+    self.ints = set()   # Interfaces
+    self.edges = set()  # Edges
+    self.cnt = 0
 
   """ Helper function """
   @staticmethod
@@ -86,8 +90,9 @@ class WartsStats(WartsReader):
 #        elif hop['icmp-type'] == 3:
 #          self.dict_append(meta, i, "<" + str(hop['icmp-code']) + ">")
     # add gapped hops
-    for q in range(i, flags['probehop']):
-      ips.append("*")
+    if 'probehop' in flags:
+      for q in range(i, flags['probehop']):
+        ips.append("*")
     return (flags, ips, rtts, meta)
 
   def do_ping(self, obj):
@@ -120,10 +125,6 @@ class WartsStats(WartsReader):
           edges.add(e1)
 
   def stats(self, verbose=False, count=0):
-    dests = set()  # Destinations / Targets
-    ints = set()   # Interfaces
-    edges = set()  # Edges
-    cnt = 0
     while True:
       (typ, data) = self.next()
       if typ == None: 
@@ -132,25 +133,42 @@ class WartsStats(WartsReader):
         continue
       (flags, ips, rtts, meta) = data
       if flags == None: break
-      cnt+=1
-      dests.add(flags['dstaddr'])
+      self.cnt+=1
+      self.dests.add(flags['dstaddr'])
       lasthop = None
       for i, ip in enumerate(ips):
-        self.addhop(lasthop, ip, ints, edges)
+        self.addhop(lasthop, ip, self.ints, self.edges)
         lasthop = ip
-      if verbose and (cnt % 1000 == 0):
+      if verbose and (self.cnt % 1000 == 0):
         print >> sys.stderr, ">> %s (traces:%d/dests:%d/ints:%d/edges:%d)" % \
-          (self.wartsfile, cnt, len(dests), len(ints), len(edges))
-      if cnt == count: break
-    return (dests, ints, edges, cnt)
+          (self.wartsfile, self.cnt, len(self.dests), len(self.ints), len(self.edges))
+      if self.cnt == count: break
+
+  def dump(self):
+    print "File: %s:" % self.wartsfile
+    print "\tProbes: %d" % self.cnt
+    print "\tUnique targets: %d" % (len(self.dests))
+    print "\tInterfaces discovered: %d" % (len(self.ints))
+    print "\tEdges discovered: %d" % (len(self.edges))
+    print "\tTrace start: %s end: %s (%2.6f sec)" % \
+      (self.tsbegin(), self.tsend(), self.elapsed())
 
 if __name__ == "__main__":
-  assert len(sys.argv) == 2
-  w = WartsStats(sys.argv[1], verbose=False)
-  (dests, ints, edges, cnt) = w.stats(verbose=True)
-  print "Probes: %d" % cnt
-  print "Unique targets: %d" % (len(dests))
-  print "Interfaces discovered: %d" % (len(ints))
-  print "Edges discovered: %d" % (len(edges))
-  print "Trace start: %s end: %s (%2.6f sec)" % \
-    (w.tsbegin(), w.tsend(), w.elapsed())
+  count = 0
+  assert len(sys.argv) >= 2
+  w1 = WartsStats(sys.argv[1], verbose=False)
+  w1.stats(verbose=True, count=count) 
+  if len(sys.argv) == 2:
+    w1.dump()
+  if len(sys.argv) == 3:
+    w2 = WartsStats(sys.argv[2], verbose=False)
+    w2.stats(verbose=True, count=count) 
+    w1.dump()
+    w2.dump()
+    print "Trace comparison:"
+    print "\tInterfaces in both %s and %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.ints & w2.ints))
+    print "\tInterfaces in %s not in %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.ints - w2.ints))
+    print "\tInterfaces in %s not in %s: %d" % (w2.wartsfile, w1.wartsfile, len(w2.ints - w1.ints))
+    print "\tEdges in both %s and %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.edges & w2.edges))
+    print "\tEdges in %s not in %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.edges - w2.edges))
+    print "\tEdges in %s not in %s: %d" % (w2.wartsfile, w1.wartsfile, len(w2.edges - w1.edges))
