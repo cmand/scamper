@@ -658,6 +658,9 @@ class WartsReader(object):
     self.deprecated_addresses = False
     self.wartsfile = wartsfile
     self.warts_open(self.wartsfile)
+    self.name = None
+    self.listid = 0
+    self.wlistid = 0
 
   def warts_open(self, infile):
     self.fd = None
