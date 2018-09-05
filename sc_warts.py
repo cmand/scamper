@@ -688,6 +688,9 @@ class WartsReader(object):
       obj = self.next_object()
       if not obj: 
         return (False, False)
+      if (obj.typ == obj_type['LIST']):
+        self.name = obj.name
+        self.wlistid = obj.wlistid
       if (obj.typ == obj_type['TRACE']) or (obj.typ == obj_type['PING']):
         return (obj.flags, obj.hops)
 
