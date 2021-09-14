@@ -28,11 +28,11 @@ def dictadd(d,k,v=1):
   d[k]+=v
 
 def doone(infile, _verbose=False):
-  print >> sys.stderr, "Doing:", infile
+  print("Doing:", infile, file=sys.stderr)
   w = WartsStats(infile, verbose=_verbose)
   (one_dsts, one_ints, one_edges, cnt) = w.stats(verbose=_verbose)
   with lock:
-    print >> sys.stderr, "assimilating", infile
+    print("assimilating", infile, file=sys.stderr)
     results['files']+=1
     results['probes']+=cnt
     if w.ts_end > results['tvalmax']: results['tvalmax'] = w.ts_end
@@ -46,7 +46,7 @@ def doone(infile, _verbose=False):
   with lock:
     for i in one_edges:
       dictadd(edges, i)
-    print >> sys.stderr, "done assimilating", infile
+    print("done assimilating", infile, file=sys.stderr)
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
@@ -59,7 +59,7 @@ if __name__ == "__main__":
         if wartsfile.find('.warts') != -1:
           wartsfiles.append(wartsfile)
   else:
-    print >> sys.stderr, "%s is not a directory." % indir
+    print("%s is not a directory." % indir, file=sys.stderr)
     sys.exit(-1)
 
   init()
@@ -67,12 +67,12 @@ if __name__ == "__main__":
   pool.map(doone, wartsfiles)
   pool.close()
   pool.join()
-  print "Wartsfiles parsed: %d" % results['files']
-  print "Traces executed: %d" % results['probes']
-  print "Unique targets: %d" % (len(dsts))
-  print "Interfaces discovered: %d" % (len(ints))
-  print "Edges discovered: %d" % (len(edges))
-  print "Trace start: %s end: %s (%2.6f sec)" % \
+  print("Wartsfiles parsed: %d" % results['files'])
+  print("Traces executed: %d" % results['probes'])
+  print("Unique targets: %d" % (len(dsts)))
+  print("Interfaces discovered: %d" % (len(ints)))
+  print("Edges discovered: %d" % (len(edges)))
+  print("Trace start: %s end: %s (%2.6f sec)" % \
     (WartsStats.epochtostr(results['tvalmin']), 
      WartsStats.epochtostr(results['tvalmax']),
-     results['tvalmax'] - results['tvalmin'])
+     results['tvalmax'] - results['tvalmin']))

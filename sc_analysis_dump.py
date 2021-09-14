@@ -22,33 +22,33 @@ def trace_to_tod(flags, hops):
     request_ttl = str(destination['probettl'])
     reply_ttl = str(destination['replyttl'])
 
-  print "\t".join(["T", flags['srcaddr'], flags['dstaddr']]),
-  print "\t".join([str(flags['listid']), str(flags['cycleid'])]),
-  print "\t" + str(int(flags['timeval'])),
+  print("\t".join(["T", flags['srcaddr'], flags['dstaddr']]), end=' ')
+  print("\t".join([str(flags['listid']), str(flags['cycleid'])]), end=' ')
+  print("\t" + str(int(flags['timeval'])), end=' ')
   # DestReplied, DestRTT, RequestTTL, ReplyTTL
-  print "\t".join([dest_replied, dest_rtt, request_ttl, reply_ttl]),
+  print("\t".join([dest_replied, dest_rtt, request_ttl, reply_ttl]), end=' ')
   # HaltReason/HaltReasonData
   if haltreason == 'none' or haltreason == 'completed': 
-    print "\tS\t0",
+    print("\tS\t0", end=' ')
   elif haltreason == 'unreach':
-    print "\tU\t" + str(flags['stopdata']),
+    print("\tU\t" + str(flags['stopdata']), end=' ')
   elif haltreason == 'loop':
-    print "\tL\t0",
+    print("\tL\t0", end=' ')
   elif haltreason == 'gaplimit':
-    print "\tG\t0" + str(flags['stopdata']),
+    print("\tG\t0" + str(flags['stopdata']), end=' ')
   else:
-    print "\t?\t0",
+    print("\t?\t0", end=' ')
   # PathComplete
-  print "\t" + path_complete,
+  print("\t" + path_complete, end=' ')
   # PerHopData
   for hop in hops:
-    print "\t" + ",".join([hop['addr'], str(hop['rtt']/1000.0), '1']),
-  print 
+    print("\t" + ",".join([hop['addr'], str(hop['rtt']/1000.0), '1']), end=' ')
+  print() 
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
   w = WartsReader(sys.argv[1], verbose=False)
   while True:
-    (flags, hops) = w.next()
+    (flags, hops) = next(w)
     if flags == False: break
     trace_to_tod(flags, hops) 

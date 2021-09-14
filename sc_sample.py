@@ -14,7 +14,7 @@ if __name__ == "__main__":
   w = WartsReader(sys.argv[1], verbose=False)
   dsts = set()
   while True:
-    (flags, hops) = w.next()
+    (flags, hops) = next(w)
     if flags == False: break
     dsts.add(flags['dstaddr'])
-  print "Found %d probed destinations in %s." % (len(dsts), sys.argv[1])
+  print("Found %d probed destinations in %s." % (len(dsts), sys.argv[1]))

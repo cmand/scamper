@@ -53,7 +53,7 @@ def is_ipv6(addr):
   try: 
     socket.inet_pton(socket.AF_INET, addr)
     return False
-  except socket.error, e:
+  except socket.error as e:
     return True
 
 def pack_referenced_address(addrid):
@@ -139,8 +139,8 @@ class WartsBaseObject(object):
         flags[block] += 2**(num % 7) 
         try:
           b = flag_method(self.setflags[flag_name])
-        except Exception, e:
-          print "threw:", e, "on:", flag_name, "using:", flag_method
+        except Exception as e:
+          print("threw:", e, "on:", flag_name, "using:", flag_method)
           exit(-1)
         hb = [hex(ord(z)) for z in b]
         #print "Writing Flag:", num, "name:", flag_name, "value:", self.setflags[flag_name], "bytes:", hb

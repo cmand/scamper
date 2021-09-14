@@ -9,7 +9,7 @@ import dpkt
 from sc_warts import *
 
 if dpkt.__version__ == '1.8':
-  print "Upgrade dpkt"
+  print("Upgrade dpkt")
   sys.exit(-1)
 
 TRACEBOXTYPE = 0x0c
@@ -28,7 +28,7 @@ class WartsTraceBoxReader(WartsReader):
   def __init__(self, wartsfile, verbose=False):
     super(WartsTraceBoxReader, self).__init__(wartsfile, verbose)
 
-  def next(self):
+  def __next__(self):
     while True:
       obj = self.next_object()
       if not obj:
@@ -44,7 +44,7 @@ class WartsTraceBoxReader(WartsReader):
       return None
     (magic, typ, length) = struct.unpack('!HHI', self.header)
     if self.verbose:
-      print "Magic: %02X Obj: %02X Len: %02x" % (magic, typ, length)
+      print("Magic: %02X Obj: %02X Len: %02x" % (magic, typ, length))
     assert(magic == obj_type['MAGIC'])
     # read remainder of object
     data = self.fd.read(length)
@@ -59,7 +59,7 @@ class WartsTraceBoxReader(WartsReader):
     elif typ == TRACEBOXTYPE:
       return WartsTraceBox(data, verbose=self.verbose) 
     else:
-      print "Unsupported object: %02x Len: %d" % (typ, length)
+      print("Unsupported object: %02x Len: %d" % (typ, length))
       assert False
 
 class WartsTraceBox(WartsBaseObject):
@@ -87,13 +87,13 @@ class WartsTraceBox(WartsBaseObject):
     ]
     flag_bytes = self.read_flags()
     if self.verbose:
-      print "TB Params:", self.flags
+      print("TB Params:", self.flags)
     offset = flag_bytes
     for i in range(self.flags['pktc']):
       pkt = WartsTraceBoxPkt(data[offset:], self.referenced_address, self.verbose)
       self.pkts.append(pkt.flags)
       offset+=pkt.flag_bytes 
-      if self.verbose: print "Pkt %d: %s" % (i+1, pkt.flags)
+      if self.verbose: print("Pkt %d: %s" % (i+1, pkt.flags))
 
 class WartsTraceBoxPkt(WartsBaseObject):
   def __init__(self, data, refs, verbose=False):
@@ -188,9 +188,9 @@ if __name__ == "__main__":
   assert len(sys.argv) == 2
   w = WartsTraceBoxReader(sys.argv[1], verbose=False)
   while True:
-    (flags, pkts) = w.next()
+    (flags, pkts) = next(w)
     if flags == False: break
-    print "tracebox from %s to %s (result: %d)" % (flags['srcaddr'], flags['dstaddr'], flags['result'])
+    print("tracebox from %s to %s (result: %d)" % (flags['srcaddr'], flags['dstaddr'], flags['result']))
     last_tx = None
     last_tx_ts = 0
     i = 0
@@ -200,7 +200,7 @@ if __name__ == "__main__":
         #print " TX at %1.3f:" % (ts)
         if last_tx != None:
           i+=1
-          print " %d: *" % (i)
+          print(" %d: *" % (i))
         last_tx = pkt['data']
         last_tx_ts = pkt['time']
       else: #RX
@@ -209,5 +209,5 @@ if __name__ == "__main__":
         rtt = (pkt['time'] - last_tx_ts)*1000.0
         if last_tx:
           diff = dict_diff(last_tx, pkt['data'])
-          print " %d: %s RTT:%1.3f: %s" % (i, pkt['data']['hop'], rtt, " ".join(diff.keys()))
+          print(" %d: %s RTT:%1.3f: %s" % (i, pkt['data']['hop'], rtt, " ".join(list(diff.keys()))))
         last_tx = None

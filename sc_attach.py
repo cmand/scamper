@@ -17,12 +17,12 @@ class Scamper:
     self.verbose = verbose
     try:
       self.fd_out = open(outfile, 'wb')
-    except Exception, e:
-      print "Couldn't open warts file:", e
+    except Exception as e:
+      print("Couldn't open warts file:", e)
       sys.exit(-1)
 
   def __del__(self):
-    print "Done."
+    print("Done.")
     if self.sfd:
       self.sfd.close()
     if self.fd_out:
@@ -43,8 +43,8 @@ class Scamper:
   @staticmethod
   def hexdump(buf):
     for i in range(len(buf)):
-      print "%02X" % ord(buf[i]),
-    print
+      print("%02X" % ord(buf[i]), end=' ')
+    print()
 
   @staticmethod
   def rob_uu_decode(text):
@@ -56,12 +56,12 @@ class Scamper:
     return res
  
   def connect(self):
-    print "Connecting:", self.server
+    print("Connecting:", self.server)
     try:
       self.sfd = socket(AF_INET, SOCK_STREAM)
       self.sfd.connect(self.server) 
-    except Exception, e:
-      print "Error connecting:", e
+    except Exception as e:
+      print("Error connecting:", e)
       sys.exit(-1)
     self.listener = threading.Thread(target=self.fetch_scamper_result)
     self.listener.start()
@@ -72,21 +72,21 @@ class Scamper:
     self.sfd.send('ATTACH\n')
 
   def fetch_scamper_result(self):
-    print "Listener."
+    print("Listener.")
     self.timeouts = 0
     while True:
       if self.timeouts > 10:
         break
       fdready = select.select([self.sfd], [], [], 1)
       if len(fdready[0]) == 0:
-        print "timeout."
+        print("timeout.")
         self.timeouts+=1
         continue
       line = ''
       while True:
         line = Scamper.readline(self.sfd)
         if line.find('ERR') != -1:
-          print "** error response:", line
+          print("** error response:", line)
           raise Exception('shit, talk to rob')
         elif line.find('MORE') != -1:
           continue
@@ -109,7 +109,7 @@ class Scamper:
       dst = line.strip()  
       #opts = '-P icmp-paris -w 10'
       opts = ''
-      print "Tracing to:", dst
+      print("Tracing to:", dst)
       self.execute('trace ' + dst + ' ' + opts)
 
 if __name__ == "__main__":

@@ -99,7 +99,7 @@ class WartsStats(WartsReader):
     (flags, responses) = (obj.flags, obj.hops)
     return (flags, responses)
 
-  def next(self):
+  def __next__(self):
     obj = None
     while True:
       obj = self.next_object()
@@ -126,7 +126,7 @@ class WartsStats(WartsReader):
 
   def stats(self, verbose=False, count=0):
     while True:
-      (typ, data) = self.next()
+      (typ, data) = next(self)
       if typ == None: 
         break
       if typ != obj_type['TRACE']:
@@ -140,18 +140,18 @@ class WartsStats(WartsReader):
         self.addhop(lasthop, ip, self.ints, self.edges)
         lasthop = ip
       if verbose and (self.cnt % 1000 == 0):
-        print >> sys.stderr, ">> %s (traces:%d/dests:%d/ints:%d/edges:%d)" % \
-          (self.wartsfile, self.cnt, len(self.dests), len(self.ints), len(self.edges))
+        print(">> %s (traces:%d/dests:%d/ints:%d/edges:%d)" % \
+          (self.wartsfile, self.cnt, len(self.dests), len(self.ints), len(self.edges)), file=sys.stderr)
       if self.cnt == count: break
 
   def dump(self):
-    print "File: %s:" % self.wartsfile
-    print "\tProbes: %d" % self.cnt
-    print "\tUnique targets: %d" % (len(self.dests))
-    print "\tInterfaces discovered: %d" % (len(self.ints))
-    print "\tEdges discovered: %d" % (len(self.edges))
-    print "\tTrace start: %s end: %s (%2.6f sec)" % \
-      (self.tsbegin(), self.tsend(), self.elapsed())
+    print("File: %s:" % self.wartsfile)
+    print("\tProbes: %d" % self.cnt)
+    print("\tUnique targets: %d" % (len(self.dests)))
+    print("\tInterfaces discovered: %d" % (len(self.ints)))
+    print("\tEdges discovered: %d" % (len(self.edges)))
+    print("\tTrace start: %s end: %s (%2.6f sec)" % \
+      (self.tsbegin(), self.tsend(), self.elapsed()))
 
 if __name__ == "__main__":
   count = 0
@@ -165,10 +165,10 @@ if __name__ == "__main__":
     w2.stats(verbose=True, count=count) 
     w1.dump()
     w2.dump()
-    print "Trace comparison:"
-    print "\tInterfaces in both %s and %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.ints & w2.ints))
-    print "\tInterfaces in %s not in %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.ints - w2.ints))
-    print "\tInterfaces in %s not in %s: %d" % (w2.wartsfile, w1.wartsfile, len(w2.ints - w1.ints))
-    print "\tEdges in both %s and %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.edges & w2.edges))
-    print "\tEdges in %s not in %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.edges - w2.edges))
-    print "\tEdges in %s not in %s: %d" % (w2.wartsfile, w1.wartsfile, len(w2.edges - w1.edges))
+    print("Trace comparison:")
+    print("\tInterfaces in both %s and %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.ints & w2.ints)))
+    print("\tInterfaces in %s not in %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.ints - w2.ints)))
+    print("\tInterfaces in %s not in %s: %d" % (w2.wartsfile, w1.wartsfile, len(w2.ints - w1.ints)))
+    print("\tEdges in both %s and %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.edges & w2.edges)))
+    print("\tEdges in %s not in %s: %d" % (w1.wartsfile, w2.wartsfile, len(w1.edges - w2.edges)))
+    print("\tEdges in %s not in %s: %d" % (w2.wartsfile, w1.wartsfile, len(w2.edges - w1.edges)))

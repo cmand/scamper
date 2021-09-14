@@ -9,7 +9,7 @@ from sc_warts import WartsReader
 from sc_warts_writer import *
 
 def usage(prog):
-  print "Usage: %s ip_dst in_warts_file out_wartsfile"
+  print("Usage: %s ip_dst in_warts_file out_wartsfile")
   sys.exit(-1)
 
 if __name__ == "__main__":
@@ -23,7 +23,7 @@ if __name__ == "__main__":
   w.write_cycle(1,1,1,0)
   p = WartsPing()
   while True:
-    (flags, hops) = r.next()
+    (flags, hops) = next(r)
     if flags == False: break
     if flags['dstaddr'] != ip: continue
     del flags['cycleid']

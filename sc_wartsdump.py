@@ -12,5 +12,5 @@ if __name__ == "__main__":
 
   w = WartsReader(sys.argv[1], verbose=True)
   while True:
-    (flags, hops) = w.next()
+    (flags, hops) = next(w)
     if flags == False: break
