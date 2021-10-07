@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (c) 2015-2018, Robert Beverly
 # All rights reserved.
@@ -45,8 +45,13 @@ obj_type = {'NONE' : 0x00, 'LIST' : 0x01, 'CYCLESTART' : 0x02, 'CYCLE' : 0x03,
             'TRACELB': 0x08, 'MAGIC' : 0x1205}
 
 def unpack_uint8_t(b):
-  return (struct.unpack('B', b[0])[0], 1)
-
+  if type(b) == int:
+      return (b, 1)
+  elif type(b) == bytes:
+      return (b[0], 1) 
+  else:
+      print("Die, unknown type in unpack_uint8_t")
+      exit(-1)
 def unpack_uint16_t(b):
   return (struct.unpack('!H', b[0:2])[0], 2)
 
@@ -54,7 +59,7 @@ def unpack_uint32_t(b):
   return (struct.unpack('!I', b[0:4])[0], 4)
 
 def read_string(b):
-  (string, remainder) = b.split('\x00', 1)
+  (string, remainder) = b.split(b'\x00', 1)
   return (string, len(string)+1)
 
 def read_timeval(b):
@@ -93,11 +98,11 @@ class WartsBaseObject(object):
     current_byte = 0
     byte = 0
     for byte in range(len(self.flagdata)):
-      flag = ord(self.flagdata[byte])
+      flag = self.flagdata[byte]
       flags_set += [self.bit_set(flag, i) for i in range(1,8)]
       if not self.more_flags(flag): break
     current_byte += byte + 1
-    if debug: print "Flags Set:", flags_set, len(flags_set)
+    if debug: print("Flags Set:", flags_set, len(flags_set))
     flags = dict()
     if flag > 0 or len(flags_set) > 8:
       paramlen = unpack_uint16_t(self.flagdata[current_byte:current_byte+2])[0]
@@ -105,12 +110,13 @@ class WartsBaseObject(object):
       for i in range(len(flags_set)):
         if (flags_set[i]):
           if (i >= len(self.flag_defines)):
-            print "** UNKNOWN FLAG: %d" % (i+1)
+            print("** UNKNOWN FLAG: %d" % (i+1))
             sys.exit(-1)
           read_cb = self.flag_defines[i][1]
           (val, bytes_read) = read_cb(self.flagdata[current_byte:])
           current_byte+=bytes_read
-          if debug: print "Flag %d: %s %s" % (i+1, self.flag_defines[i][0], val)
+          if debug: print("Flag %d: %s %s" % (i+1, self.flag_defines[i][0],
+              val))
           self.flags[self.flag_defines[i][0]] = val
     # be consistent in populating srcaddr/dstaddr for deprecated addrs
     if ('srcipid' in self.flags) and ('srcaddr' not in self.flags):
@@ -143,7 +149,7 @@ class WartsBaseObject(object):
       try:
         addr = self.referenced_address[addr_id]
       except:
-        print "Die: couldn't find referenced address %d" % addr_id
+        print("Die: couldn't find referenced address %d" % addr_id)
         sys.exit(-1)
     if len(addr) == 4:
       return (socket.inet_ntop(socket.AF_INET, addr), bytes_read)
@@ -175,7 +181,7 @@ class WartsDeprecatedAddress:
     elif self.type == 0x02:
       self.addr = socket.inet_ntop(socket.AF_INET6, data[2:18])
     else:
-      print >> sys.stderr, "Addr type:", self.type, "not implemented."
+      sys.stderr.write("Addr type:", self.type, "not implemented.")
       assert False
 
 
@@ -193,9 +199,9 @@ class WartsList(WartsBaseObject):
       self.flagdata = data[8+read_len:]
     flag_bytes = self.read_flags()
     if self.verbose:
-      print "WlistID:", self.wlistid, "ListID:",  self.listid, \
-            "Name:", self.name
-      print "Flags:", self.flags
+      print("WlistID:", self.wlistid, "ListID:",  self.listid, \
+            "Name:", self.name)
+      print("Flags:", self.flags)
 
 
 class WartsCycle(WartsBaseObject):
@@ -215,9 +221,9 @@ class WartsCycle(WartsBaseObject):
     if ('dstipid' in self.flags) and ('dstaddr' not in self.flags):
       self.flags['dstaddr'] = self.flags['dstipid']
     if self.verbose:
-      print "WcycleID:", self.wcycleid, "ListID:",  self.listid, \
-            "CycleID:", self.cycleid, "Start:", self.start
-      print "Flags:", self.flags
+      print("WcycleID:", self.wcycleid, "ListID:",  self.listid, \
+            "CycleID:", self.cycleid, "Start:", self.start)
+      print("Flags:", self.flags)
 
 class WartsCycleStop(WartsBaseObject):
   def __init__(self, data, verbose=False):
@@ -225,7 +231,7 @@ class WartsCycleStop(WartsBaseObject):
     self.data = data
     (self.cycleid, self.stop) = struct.unpack('!II', data[:8])
     if self.verbose:
-      print "CycleID:", self.cycleid, "Stop:", self.stop
+      print("CycleID:", self.cycleid, "Stop:", self.stop)
 
 
 class WartsPing(WartsBaseObject):
@@ -269,13 +275,13 @@ class WartsPing(WartsBaseObject):
     flag_bytes = self.read_flags()
     self.records = unpack_uint16_t(data[flag_bytes:])[0]
     if self.verbose:
-      print "Ping Params:", self.flags
+      print("Ping Params:", self.flags)
     offset = flag_bytes+2 
     for record in range(self.records):
       w = WartsPingReply(data[offset:], self.referenced_address, self.verbose)
       self.hops.append(w.flags)
       offset+=w.flag_bytes
-      if self.verbose: print "Reply %d: %s" % (record+1, w.flags)
+      if self.verbose: print("Reply %d: %s" % (record+1, w.flags))
 
 
 class WartsPingReply(WartsBaseObject):
@@ -346,8 +352,8 @@ class WartsTrace(WartsBaseObject):
     flag_bytes = self.read_flags()
     self.records = unpack_uint16_t(data[flag_bytes:])[0]
     if self.verbose:
-      print "Flags:", self.flags
-      print "Hops recorded:", self.records
+      print("Flags:", self.flags)
+      print("Hops recorded:", self.records)
     offset = flag_bytes+2 
     for record in range(self.records):
       w = WartsTraceHop(data[offset:], self.referenced_address, self.verbose)
@@ -420,7 +426,7 @@ class WartsTraceHop(WartsBaseObject):
       self.flags['icmp-code'] = self.flags['icmp'] & 0xFF
       del self.flags['icmp']
     if self.verbose:
-      print "\t", self.flags
+      print("\t", self.flags)
 
   @staticmethod
   # copied blindly/stupidly from scamper/scamper_icmpext.h
@@ -513,9 +519,9 @@ class WartsTracelb(WartsBaseObject):
     ]
     flag_bytes = self.read_flags()
     if self.verbose:
-      print "Flags:", self.flags
-      print "Nodes:", self.flags['nodec']
-      print "Links:", self.flags['linkc']
+      print("Flags:", self.flags)
+      print("Nodes:", self.flags['nodec'])
+      print("Links:", self.flags['linkc'])
 
     offset = flag_bytes
 
@@ -548,7 +554,7 @@ class WartsTracelbNode(WartsBaseObject):
     self.offset = self.read_flags()
     
     if self.verbose:
-      print "Node flags:", self.flags
+      print("Node flags:", self.flags)
 
 class WartsTracelbLink(WartsBaseObject):
   def __init__(self, data, refs=None, verbose=False):
@@ -564,7 +570,7 @@ class WartsTracelbLink(WartsBaseObject):
     ]
     flag_bytes = self.read_flags()
     if self.verbose:
-      print "Link flags:", self.flags
+      print("Link flags:", self.flags)
     self.offset = flag_bytes
     self.link = {'flags': self.flags, 'probe_sets': []}
     self.probe_sets = []
@@ -588,7 +594,7 @@ class WartsTracelbProbeSet(WartsBaseObject):
     ]
     flag_bytes = self.read_flags()
     if self.verbose:
-      print "Probe count:", self.flags['probec']
+      print("Probe count:", self.flags['probec'])
     self.offset = flag_bytes
     self.probe_set = []
     
@@ -614,7 +620,7 @@ class WartsTracelbProbe(WartsBaseObject):
     ]
     flag_bytes = self.read_flags()
     if self.verbose:
-      print "Probe flags:", self.flags
+      print("Probe flags:", self.flags)
     self.offset = flag_bytes
     self.replies = []
     
@@ -647,7 +653,7 @@ class WartsTracelbReply(WartsBaseObject):
     ]
     self.offset = self.read_flags()
     if self.verbose:
-      print "Reply flags:", self.flags
+      print("Reply flags:", self.flags)
 
 
 class WartsReader(object):
@@ -670,7 +676,7 @@ class WartsReader(object):
       self.fd.read(1)
       self.fd = bz2.BZ2File(infile, 'rb')
       return self.fd
-    except IOError, e:
+    except IOError as e:
       pass
     # try reading as a gzip file
     try:
@@ -678,7 +684,7 @@ class WartsReader(object):
       self.fd.read(1)
       self.fd = gzip.open(infile, 'rb')
       return self.fd
-    except IOError, e:
+    except IOError as e:
       pass
     self.fd = open(infile, 'rb')
     return self.fd
@@ -702,7 +708,7 @@ class WartsReader(object):
       return None
     (magic, typ, length) = struct.unpack('!HHI', self.header)
     if self.verbose:
-      print "Magic: %02X Obj: %02X Len: %02x" % (magic, typ, length)
+      print("Magic: %02X Obj: %02X Len: %02x" % (magic, typ, length))
     assert(magic == obj_type['MAGIC'])
     # read remainder of object
     data = self.fd.read(length)
@@ -730,7 +736,7 @@ class WartsReader(object):
       self.address_ref[addr_id] = wd.addr 
       return wd
     else:
-      print "Unsupported object: %02x Len: %d" % (typ, length)
+      print("Unsupported object: %02x Len: %d" % (typ, length))
       return False #with this commmand, I could run my program over several warts files, 
       #instead of having to run my script for each file separately due to the sys.exit() instruction
       #sys.exit(-1)
